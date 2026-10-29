@@ -13,6 +13,9 @@ from .explain import TargetError, explain
 from .render import markdown
 from .report import build_report
 
+# Not on PyPI yet: a bare `repolife` would install whatever package owns that name there.
+DEFAULT_INSTALL_SPEC = "git+https://github.com/tianyi-zhang-02/repolife"
+
 
 def _add_analysis_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--active-days", type=int, metavar="N", help="touched within N days => ACTIVE (default 90)")
@@ -107,7 +110,7 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
     init.add_argument("--agent", choices=("claude", "agents", "all", "none"), default="all", help="which agent integrations to write (default: all)")
     init.add_argument("--ci", choices=("none", "github"), default="none", help="also write a CI workflow (default: none)")
-    init.add_argument("--install-spec", default="repolife", metavar="SPEC", help="what `pip install` should receive in generated files, e.g. a git URL (default: repolife)")
+    init.add_argument("--install-spec", default=DEFAULT_INSTALL_SPEC, metavar="SPEC", help=f"what `pip install` should receive in generated files (default: {DEFAULT_INSTALL_SPEC})")
     init.add_argument("--force", action="store_true", help="overwrite files repolife would otherwise leave alone")
     init.add_argument("--dry-run", action="store_true", help="show what would change without writing")
     init.set_defaults(func=_cmd_init)

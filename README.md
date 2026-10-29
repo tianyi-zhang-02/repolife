@@ -20,7 +20,7 @@ readable by a person.
 ## Quick start
 
 ```bash
-pip install repolife            # or: pipx run repolife scan .   /   uvx repolife scan .
+pip install git+https://github.com/tianyi-zhang-02/repolife   # or run once: uvx --from git+https://github.com/tianyi-zhang-02/repolife repolife scan .
 repolife scan .                 # markdown report
 repolife scan . --format json   # machine-readable
 repolife why path/to/file.py    # the evidence behind one verdict

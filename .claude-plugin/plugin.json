@@ -2,5 +2,12 @@
   "name": "repolife",
   "version": "0.1.0",
   "description": "Which parts of a repository are alive? Volume, git activity and reachability in one report, for coding agents.",
+  "author": {
+    "name": "Tianyi Zhang",
+    "url": "https://github.com/tianyi-zhang-02"
+  },
+  "homepage": "https://github.com/tianyi-zhang-02/repolife",
+  "repository": "https://github.com/tianyi-zhang-02/repolife",
+  "license": "MIT",
   "keywords": ["dead-code", "maintainability", "code-health"]
 }

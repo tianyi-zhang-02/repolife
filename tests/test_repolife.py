@@ -8,7 +8,7 @@ from pathlib import Path
 from helpers import TempRepo, git, write_tree
 from repolife import config, inventory, templates
 from repolife.analyze import analyze
-from repolife.cli import main
+from repolife.cli import DEFAULT_INSTALL_SPEC, main
 from repolife.explain import TargetError, explain
 from repolife.model import SCHEMA_VERSION
 from repolife.mount import BEGIN, END, mount
@@ -211,6 +211,13 @@ class MountTest(TempRepo):
 
         second = {a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/repolife", False, False)}
         self.assertEqual(second, {"unchanged"})
+
+    def test_ci_workflow_installs_from_the_repository_by_default(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            self.assertEqual(main(["init", str(self.root), "--ci", "github"]), 0)
+        workflow = (self.root / ".github/workflows/repolife.yml").read_text()
+        self.assertNotIn("__INSTALL_SPEC__", workflow)
+        self.assertIn(f'pip install "{DEFAULT_INSTALL_SPEC}"', workflow)
 
     def test_edited_files_are_left_alone_unless_forced(self):
         mount(self.root, {"claude"}, None, "repolife")

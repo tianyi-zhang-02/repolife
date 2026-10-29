@@ -9,6 +9,7 @@ description = "Which parts of a repository are alive? Volume, git activity and r
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
+authors = [{ name = "Tianyi Zhang" }]
 keywords = ["dead-code", "maintainability", "code-health", "ai-agents", "claude-code", "mcp"]
 classifiers = [
   "Development Status :: 3 - Alpha",
@@ -18,6 +19,10 @@ classifiers = [
   "Topic :: Software Development :: Quality Assurance",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/tianyi-zhang-02/repolife"
+Issues = "https://github.com/tianyi-zhang-02/repolife/issues"
 
 [project.scripts]
 repolife = "repolife.cli:main"
