@@ -6,8 +6,8 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_INT_KEYS = ("active_days", "dormant_days", "depth", "top")
-_LIST_KEYS = ("keep", "exclude", "entry")
+_INT_KEYS = ("active_days", "dormant_days", "owner_inactive_days", "depth", "top")
+_LIST_KEYS = ("keep", "exclude", "entry", "ignore_authors")
 
 
 class ConfigError(ValueError):
@@ -18,11 +18,13 @@ class ConfigError(ValueError):
 class Config:
     active_days: int = 90  # touched within this many days => ACTIVE
     dormant_days: int = 365  # untouched for this long (and little used) => DORMANT
+    owner_inactive_days: int = 180  # an author with no commit anywhere in the repository for this long no longer counts as an owner
     depth: int = 1  # directory depth for the per-directory rollup
     top: int = 15  # rows in "largest files" and "hotspots"
     keep: list[str] = field(default_factory=list)  # globs never reported as orphans (public API, plugins)
     exclude: list[str] = field(default_factory=list)  # globs skipped entirely
     entry: list[str] = field(default_factory=list)  # extra entry points: module names or paths
+    ignore_authors: list[str] = field(default_factory=list)  # globs on commit author name or email that never own code (bots are ignored already)
 
 
 def _read(path: Path) -> dict:

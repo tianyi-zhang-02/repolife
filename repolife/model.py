@@ -37,6 +37,14 @@ class FileRecord:
     commits_year: int = 0
     authors_year: int = 0
 
+    # Ownership (see ownership.py). Observed from git, declared in CODEOWNERS.
+    owner: str | None = None  # the person with the largest share of recent maintenance
+    owner_share: int | None = None  # percent
+    owner_idle_days: int | None = None  # days since the owner last committed anywhere in the repository
+    ownership: str | None = None  # "owned" | "no-active-owner" | "unknown"; None without git
+    declared_owners: list[str] | None = None  # CODEOWNERS entries; None when the repository has none
+    declared_match: bool | None = None  # a declared owner is among the people who maintain the file; None when undecidable
+
     # Verdict.
     status: str | None = None  # one of STATUSES, "UNKNOWN" without git, None for non-code
     confidence: str | None = None  # only set for ORPHAN: "high" | "medium" | "low"

@@ -20,6 +20,8 @@ DEFAULT_INSTALL_SPEC = "git+https://github.com/tianyi-zhang-02/repolife"
 def _add_analysis_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--active-days", type=int, metavar="N", help="touched within N days => ACTIVE (default 90)")
     p.add_argument("--dormant-days", type=int, metavar="N", help="untouched for N days and barely used => DORMANT (default 365)")
+    p.add_argument("--owner-inactive-days", type=int, metavar="N", help="an author silent in the whole repository for N days no longer counts as an owner (default 180)")
+    p.add_argument("--ignore-author", dest="ignore_authors", action="append", default=[], metavar="GLOB", help="never credit commits whose author name or email matches (repeatable; bots are ignored already)")
     p.add_argument("--keep", action="append", default=[], metavar="GLOB", help="never report matching files as orphans (repeatable)")
     p.add_argument("--exclude", action="append", default=[], metavar="GLOB", help="skip matching files entirely (repeatable)")
     p.add_argument("--entry", action="append", default=[], metavar="MODULE_OR_PATH", help="extra entry point (repeatable)")
@@ -29,11 +31,11 @@ def _add_analysis_options(p: argparse.ArgumentParser) -> None:
 
 def _config_for(root: Path, args: argparse.Namespace) -> config.Config:
     cfg = config.load(root)
-    for key in ("active_days", "dormant_days", "depth", "top"):
+    for key in ("active_days", "dormant_days", "owner_inactive_days", "depth", "top"):
         value = getattr(args, key)
         if value is not None:
             setattr(cfg, key, value)
-    for key in ("keep", "exclude", "entry"):
+    for key in ("keep", "exclude", "entry", "ignore_authors"):
         current = getattr(cfg, key)
         current.extend(v for v in getattr(args, key) if v not in current)
     return cfg

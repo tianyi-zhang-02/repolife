@@ -18,18 +18,26 @@ CONFIG = """\
 
 # Extra entry points: a module name or a file path.
 # entry = ["mypkg.cli", "scripts/release.py"]
+
+# Ownership: an author with no commit anywhere in the repository for this many days
+# no longer counts as someone who maintains the code.
+# owner_inactive_days = 180
+
+# Commit authors that never own code, matched against name or email, ignoring case.
+# Bots such as dependabot are ignored already. A .mailmap merges one person's addresses.
+# ignore_authors = ["release-script*", "*@ci.example.com"]
 """
 
 SKILL = """\
 ---
 name: repolife
-description: Check which parts of a repository are alive before refactoring or cleaning up - code volume, git activity and unreachable (orphan) files. Use when asked about dead or unused code, repository health, what is safe to delete, or where to start a cleanup.
+description: Check which parts of a repository are alive and who maintains them before refactoring, cleaning up or asking for a review - code volume, git activity, unreachable (orphan) files and code nobody active owns. Use when asked about dead or unused code, repository health, what is safe to delete, who owns or should review a path, or where to start a cleanup.
 ---
 
 # repolife
 
-repolife reports three things about a repository: how much code there is, how recently it
-changed, and whether anything still reaches it. It only reads; it never edits code.
+repolife reports four things about a repository: how much code there is, how recently it
+changed, whether anything still reaches it, and who has been maintaining it. It only reads; it never edits code.
 
 ## Run it
 
@@ -41,7 +49,26 @@ If `repolife` is not on PATH, use `python3 -m repolife ...` or `uvx repolife ...
 Add `--format md` (the default) for a report meant to be read by a person.
 
 Read in this order: `summary` (sizes, status counts, orphan share), `cleanup.orphan_files`,
-`cleanup.test_only_files`, then `hotspots` and `directories` for where change is concentrated.
+`cleanup.test_only_files`, then `hotspots` and `directories` for where change is concentrated,
+and `ownership` for who maintains what.
+
+## Ownership
+
+`ownership` is inferred from git: each commit credits its author with the files it touched, recent
+commits weighing more, so an owner is whoever has maintained a file lately. It says who has been
+changing the code, not who is accountable, and git cannot tell who reviewed.
+
+- `directories[].owners` lists the people behind each directory with their share and `idle_days`
+  (days since their last commit anywhere in the repository). `ownership` is `owned`,
+  `no-active-owner` (the people still active hold under 20% of the maintenance) or `unknown`.
+- `ownership.needs_owner_files` is live code nobody active maintains: ask a human to assign it
+  before changing it, and do not pick a reviewer from it. `ownership.codeowners` compares CODEOWNERS
+  with the commit history (`uncovered_files`, `differing_files`).
+- Orphan rows carry `owner` and `owner_idle_days`: that is who to ask before deleting. An owner who
+  is gone is a reason to be careful, not permission to delete.
+- To find who to ask about a path, use `repolife why <path>`: its `owners:` line lists who maintains it
+  and marks anyone who has gone silent.
+- Authors are matched by name; a `.mailmap` fixes merged or split people. Bots are ignored.
 
 ## Statuses
 
@@ -77,7 +104,8 @@ Before refactoring or deleting code, run `repolife scan . --format json` to see 
 ACTIVE, STABLE, DORMANT or ORPHAN (nothing reaches them). Verify a candidate with
 `repolife why <path>` and a repository-wide search before removing it; the scan is static and
 cannot see dynamic loading or external consumers. Files that must stay go under `keep` in
-`.repolife.toml`. Delete in small, separate changes and run the tests.
+`.repolife.toml`. Delete in small, separate changes and run the tests. To find who maintains a path,
+read the `ownership` section of the scan or run `repolife why <path>`.
 """
 
 GITHUB_WORKFLOW = """\

@@ -12,8 +12,79 @@ def _table(headers: list[str], rows: list[list], right: set[int] | None = None) 
     return out + [""]
 
 
+_STATE_TEXT = {"owned": "owned", "no-active-owner": "no active owner", "unknown": "no history"}
+
+
 def _n(value: int) -> str:
     return f"{value:,}"
+
+
+def _cell(text: str) -> str:
+    return text.replace("|", "/")
+
+
+def _idle(days: int | None, limit: int) -> str:
+    return f" (silent {days}d)" if days is not None and days > limit else ""
+
+
+def _owners(owners: list[dict], limit: int, contributors: int = 0) -> str:
+    text = ", ".join(f"{o['name']} {o['share']}%{_idle(o['idle_days'], limit)}" for o in owners)
+    if text and sum(o["share"] for o in owners) < 50 and contributors > len(owners):  # nobody clearly owns it: say so
+        text += f" + {contributors - len(owners)} others"
+    return _cell(text or "-")
+
+
+def _owner(name: str | None, idle: int | None, limit: int) -> str:
+    return _cell(f"{name}{_idle(idle, limit)}") if name else "-"
+
+
+def _ownership(own: dict, directories: list[dict], limit: int) -> list[str]:
+    gone = own["inactive_days"]
+    people, unowned = own["authors"], own["no_active_owner"]
+    lines = ["## Ownership", ""]
+    lines += [
+        f"- **{people['total']}** authors in the commit history, **{people['active']}** with a commit in the last {gone} days; "
+        f"the fewest people who together hold half the code: **{own['bus_factor']}**",
+        f"- **{_n(unowned['code'])}** lines (**{unowned['share']}%**) in {_n(unowned['files'])} files have no active owner: "
+        f"nobody who maintains them has committed anywhere in the last {gone} days",
+    ]
+    if own["unattributed"]["code"]:
+        lines.append(f"- {_n(own['unattributed']['code'])} lines have no usable history (uncommitted, or only touched by bots)")
+    lines.append("")
+    rows = [
+        [f"`{r['path']}`", _n(r["code"]), _owners(r["owners"], gone, r["contributors"]), _STATE_TEXT[r["ownership"]], _n(r["no_active_owner_code"])]
+        for r in directories[:limit]
+        if "owners" in r
+    ]
+    if rows:
+        lines += ["Who maintains each directory (share of recent commits, recent ones weighing more):", ""]
+        lines += _table(["Directory", "Code", "Owners", "State", "Code with no active owner"], rows, {1, 4})
+    needs = own["needs_owner_files"]
+    if needs:
+        lines += ["Live code nobody active maintains, largest first. Someone needs to be assigned:", ""]
+        lines += _table(
+            ["File", "Code", "Status", "Last maintainer"],
+            [[f"`{r['path']}`", _n(r["code"]), r["status"] or "-", _owner(r["last_owner"], r["owner_idle_days"], gone)] for r in needs],
+            {1},
+        )
+    co = own["codeowners"]
+    if co:
+        lines += [
+            f"CODEOWNERS (`{co['file']}`, {co['rules']} rules): **{_n(co['uncovered']['files'])}** code files ({co['uncovered']['share']}% of code) have no declared owner; "
+            f"**{_n(co['differs']['files'])}** have a declared owner who does not appear among the people maintaining them.",
+            "",
+        ]
+        if co["uncovered_files"]:
+            lines += ["Without a declared owner:", ""]
+            lines += _table(["File", "Code", "Maintained by"], [[f"`{r['path']}`", _n(r["code"]), _cell(r["owner"] or "-")] for r in co["uncovered_files"]], {1})
+        if co["differing_files"]:
+            lines += ["Declared owner differs from who maintains it:", ""]
+            lines += _table(
+                ["File", "Code", "Declared", "Maintained by"],
+                [[f"`{r['path']}`", _n(r["code"]), _cell(" ".join(r["declared"])), _cell(r["observed"] or "-")] for r in co["differing_files"]],
+                {1},
+            )
+    return lines
 
 
 def markdown(rep: dict, limit: int = 40) -> str:
@@ -62,19 +133,28 @@ def markdown(rep: dict, limit: int = 40) -> str:
     if git["available"]:
         lines += ["## Hotspots (most commits in the last 365 days)", ""]
         lines += _table(
-            ["File", "Commits", "Authors", "Code", "Last commit", "Status"],
-            [[f"`{r['path']}`", r["commits_year"], r["authors_year"], _n(r["code"]), r["last_commit"], r["status"]] for r in rep["hotspots"]],
+            ["File", "Commits", "Authors", "Code", "Last commit", "Status", "Owner"],
+            [[f"`{r['path']}`", r["commits_year"], r["authors_year"], _n(r["code"]), r["last_commit"], r["status"], _cell(r.get("owner") or "-")] for r in rep["hotspots"]],
             {1, 2, 3},
         )
+
+    own = rep["ownership"]
+    gone = own.get("inactive_days", 0)
+    if own["available"]:
+        lines += _ownership(own, rep["directories"], limit)
 
     cleanup = rep["cleanup"]
     lines += ["## Cleanup candidates", ""]
     orphans = cleanup["orphan_files"]
     if orphans:
         lines += [f"Orphan files, most confident first (showing {min(limit, len(orphans))} of {len(orphans)}):", ""]
+        with_owner = own["available"]
         lines += _table(
-            ["File", "Code", "Confidence", "Last commit", "Notes"],
-            [[f"`{r['path']}`", _n(r["code"]), r["confidence"], r["last_commit"] or "-", "; ".join(r["notes"]) or "-"] for r in orphans[:limit]],
+            ["File", "Code", "Confidence", "Last commit", *(["Owner"] if with_owner else []), "Notes"],
+            [
+                [f"`{r['path']}`", _n(r["code"]), r["confidence"], r["last_commit"] or "-", *([_owner(r["owner"], r["owner_idle_days"], gone)] if with_owner else []), "; ".join(r["notes"]) or "-"]
+                for r in orphans[:limit]
+            ],
             {1},
         )
     else:

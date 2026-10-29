@@ -9,11 +9,12 @@ from dataclasses import dataclass
 from datetime import date, datetime, timezone
 from pathlib import Path
 
-from . import gitlog, graph, inventory, textrefs
+from . import gitlog, graph, inventory, ownership, textrefs
 from .analyzers import Analyzer, Repo, load_analyzers
 from .config import Config
 from .gitlog import Activity
 from .model import FileRecord
+from .ownership import Ownership
 
 # Directories whose contents are often run by hand rather than imported.
 HINT_DIRS = frozenset({"examples", "example", "scripts", "tools", "benchmarks", "bin", "notebooks", "experiments", "research", "docs"})
@@ -31,6 +32,7 @@ class Analysis:
     analyzers: list[str]
     skipped: dict[str, int]
     unparsed: list[str]
+    ownership: Ownership | None = None  # None without git history
 
 
 def _day(ts: int) -> str:
@@ -44,6 +46,18 @@ def _apply_activity(rec: FileRecord, act, now: float) -> None:
     rec.first_commit, rec.last_commit = _day(act.first), _day(act.last)
     rec.age_days = int((now - act.last) // 86400)
     rec.commits_active, rec.commits_year, rec.authors_year = act.commits_active, act.commits_year, act.authors_year
+
+
+def _apply_ownership(rec: FileRecord, own: Ownership) -> None:
+    found = own.files.get(rec.path)
+    if found is None:
+        return
+    rec.ownership = found.state
+    if found.shares:
+        top = own.owners(found.shares)[0]
+        rec.owner, rec.owner_share, rec.owner_idle_days = top.name, round(100 * top.share), top.idle_days
+    rec.declared_owners = None if found.declared is None else list(found.declared)
+    rec.declared_match = found.declared_match
 
 
 def _orphan_verdict(rec: FileRecord, g: graph.Graph, cfg: Config, now: float, have_git: bool) -> tuple[str, list[str]]:
@@ -147,7 +161,7 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
                 scans[path] = textrefs.scan_text(texts[path], weak=mode == "weak")
 
     g = graph.build(results, analyzed, scans, cfg.keep, cfg.entry)
-    activity = gitlog.load(root, now, cfg.active_days) if used_git else None
+    activity = gitlog.load(root, now, cfg.active_days, cfg.ignore_authors) if used_git else None
 
     extra_comments: dict[str, set[int]] = {}
     for res in results:
@@ -167,6 +181,12 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
     for rec in records.values():
         _judge(rec, g, cfg, now, activity is not None)
 
+    owners = None
+    if activity is not None:
+        owners = ownership.compute(activity, cfg.owner_inactive_days, now, records, ownership.find_codeowners(known, read))
+        for rec in records.values():
+            _apply_ownership(rec, owners)
+
     return Analysis(
         root=root,
         cfg=cfg,
@@ -178,4 +198,5 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
         analyzers=sorted({r for r in analyzed.values()}),
         skipped=dict(skipped),
         unparsed=sorted(unparsed),
+        ownership=owners,
     )

@@ -68,6 +68,15 @@ def explain(a: Analysis, target: str) -> str:
     elif a.activity is not None:
         out.append("git:           no history for this file (new or untracked)")
 
+    found = a.ownership.files.get(path) if a.ownership else None
+    if found is not None:
+        gone = a.ownership.inactive_days
+        who = ", ".join(f"{o.name} {round(100 * o.share)}%" + (f" (silent {o.idle_days}d)" if o.idle_days > gone else "") for o in a.ownership.owners(found.shares))
+        out.append(f"owners:        {who or 'none (no usable history)'}" + ("; NO ACTIVE OWNER" if found.state == "no-active-owner" else ""))
+        if found.declared is not None:
+            check = {True: "includes a person who maintains it", False: "none of them maintains it", None: "cannot be compared with the commit authors"}[found.declared_match]
+            out.append(f"CODEOWNERS:    {' '.join(found.declared) or 'no declared owner'}" + (f" ({check})" if found.declared else ""))
+
     if rec.analyzer:
         route = g.chain(path)
         if len(route) > 1:

@@ -9,8 +9,10 @@ from datetime import datetime, timezone
 from . import __version__
 from .analyze import Analysis
 from .model import SCHEMA_VERSION, STATUSES
+from .ownership import UNKNOWN, UNOWNED, Owner, bus_factor, rollup
 
 _CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
+_LISTED_OWNERS = 3  # owners shown per file or directory
 
 
 def _pct(part: int, whole: int) -> float:
@@ -19,6 +21,64 @@ def _pct(part: int, whole: int) -> float:
 
 def _dir_key(path: str, depth: int) -> str:
     return "/".join(path.split("/")[:-1][:depth]) or "."
+
+
+def _owner_rows(owners: list[Owner]) -> list[dict]:
+    return [{"name": o.name, "share": round(100 * o.share), "idle_days": o.idle_days} for o in owners[:_LISTED_OWNERS]]
+
+
+def _ownership_section(a: Analysis, code_recs: list) -> dict:
+    """Who maintains the code, who is gone, and what CODEOWNERS says. Names only: emails never leave the tool."""
+    own = a.ownership
+    if own is None:
+        return {"available": False}
+    top = a.cfg.top
+    live = [r for r in code_recs if r.code > 0]
+    area = rollup(own, ((r.path, r.code) for r in live))
+    unowned = [r for r in live if r.ownership == UNOWNED]
+    unowned_code = sum(r.code for r in unowned)
+    needs = sorted((r for r in unowned if r.status != "ORPHAN"), key=lambda r: (-r.code, r.path))
+    ranked = sorted(area.lines.items(), key=lambda kv: (-kv[1], own.authors[kv[0]].name))
+    section: dict = {
+        "available": True,
+        "inactive_days": own.inactive_days,
+        "authors": {"total": len(own.authors), "active": sum(own.is_active(who) for who in own.authors)},
+        "bus_factor": bus_factor(area),
+        "no_active_owner": {"files": len(unowned), "code": unowned_code, "share": _pct(unowned_code, area.code)},
+        "unattributed": {"files": sum(r.ownership == UNKNOWN for r in live), "code": area.unattributed},
+        "top_authors": [
+            {
+                "name": own.authors[who].name,
+                "code": round(lines),
+                "share": _pct(round(lines), area.code),
+                "last_commit": _day(own.authors[who].last),
+                "idle_days": own.idle_days(who),
+                "active": own.is_active(who),
+            }
+            for who, lines in ranked[:top]
+        ],
+        "needs_owner_files": [
+            {"path": r.path, "code": r.code, "status": r.status, "last_commit": r.last_commit, "last_owner": r.owner, "owner_idle_days": r.owner_idle_days}
+            for r in needs[:top]
+        ],
+        "codeowners": None,
+    }
+    if own.codeowners:
+        uncovered = [r for r in live if not r.declared_owners]
+        differs = sorted((r for r in live if r.declared_match is False), key=lambda r: (-r.code, r.path))
+        section["codeowners"] = {
+            "file": own.codeowners,
+            "rules": own.rules,
+            "uncovered": {"files": len(uncovered), "code": sum(r.code for r in uncovered), "share": _pct(sum(r.code for r in uncovered), sum(r.code for r in live))},
+            "differs": {"files": len(differs), "code": sum(r.code for r in differs)},
+            "uncovered_files": [{"path": r.path, "code": r.code, "owner": r.owner} for r in sorted(uncovered, key=lambda r: (-r.code, r.path))[:top]],
+            "differing_files": [{"path": r.path, "code": r.code, "declared": (r.declared_owners or [])[:_LISTED_OWNERS], "observed": r.owner} for r in differs[:top]],
+        }
+    return section
+
+
+def _day(ts: int) -> str:
+    return datetime.fromtimestamp(ts, timezone.utc).strftime("%Y-%m-%d")
 
 
 def build_report(a: Analysis, full: bool = False) -> dict:
@@ -49,12 +109,22 @@ def build_report(a: Analysis, full: bool = False) -> dict:
     test_only = [r for r in code_recs if r.reachability == "test" and not r.is_test]
 
     directories: dict[str, dict] = {}
+    dir_files: dict[str, list[tuple[str, int]]] = defaultdict(list)
     for r in code_recs:
-        row = directories.setdefault(_dir_key(r.path, a.cfg.depth), {"path": _dir_key(r.path, a.cfg.depth), "files": 0, "code": 0, **{s.lower(): 0 for s in STATUSES}})
+        key = _dir_key(r.path, a.cfg.depth)
+        row = directories.setdefault(key, {"path": key, "files": 0, "code": 0, **{s.lower(): 0 for s in STATUSES}})
         row["files"] += 1
         row["code"] += r.code
         if r.status in STATUSES:
             row[r.status.lower()] += r.code
+        dir_files[key].append((r.path, r.code))
+    if a.ownership is not None:
+        for key, row in directories.items():
+            area = rollup(a.ownership, dir_files[key])
+            row["owners"] = _owner_rows(area.owners)
+            row["contributors"] = sum(lines * 100 >= area.code for lines in area.lines.values())  # people with at least 1% of the code
+            row["ownership"] = area.state
+            row["no_active_owner_code"] = sum(c for p, c in dir_files[key] if a.records[p].ownership == UNOWNED)
 
     unanalyzed = defaultdict(lambda: {"files": 0, "code": 0})
     for r in code_recs:
@@ -72,8 +142,13 @@ def build_report(a: Analysis, full: bool = False) -> dict:
     ]
     if a.activity is None:
         caveats.append("No git history was available, so activity statuses are UNKNOWN.")
-    elif a.activity.shallow:
-        caveats.append("The git clone is shallow: activity numbers cover only the fetched history.")
+    else:
+        if a.activity.shallow:
+            caveats.append("The git clone is shallow: activity and ownership cover only the fetched history.")
+        caveats.append(
+            "Ownership is inferred from git commit authors (recent commits weigh more; `.mailmap` merges identities). "
+            f"It shows who has been changing the code, not who is accountable, and an owner counts as gone after {a.cfg.owner_inactive_days} days without a commit anywhere in the repository."
+        )
     if unanalyzed:
         caveats.append("No reachability analyzer for: " + ", ".join(sorted(unanalyzed)) + ". Those files only get volume and activity.")
 
@@ -91,6 +166,8 @@ def build_report(a: Analysis, full: bool = False) -> dict:
         "settings": {
             "active_days": a.cfg.active_days,
             "dormant_days": a.cfg.dormant_days,
+            "owner_inactive_days": a.cfg.owner_inactive_days,
+            "ignore_authors": a.cfg.ignore_authors,
             "keep": a.cfg.keep,
             "exclude": a.cfg.exclude,
             "entry": a.cfg.entry,
@@ -109,12 +186,13 @@ def build_report(a: Analysis, full: bool = False) -> dict:
         },
         "languages": sorted(languages.values(), key=lambda row: -row["code"]),
         "directories": sorted(directories.values(), key=lambda row: -row["code"]),
+        "ownership": _ownership_section(a, code_recs),
         "largest_files": [
             {"path": r.path, "language": r.language, "code": r.code, "status": r.status}
             for r in sorted(code_recs, key=lambda r: -r.code)[:top]
         ],
         "hotspots": [
-            {"path": r.path, "commits_year": r.commits_year, "authors_year": r.authors_year, "code": r.code, "last_commit": r.last_commit, "status": r.status}
+            {"path": r.path, "commits_year": r.commits_year, "authors_year": r.authors_year, "code": r.code, "last_commit": r.last_commit, "status": r.status, "owner": r.owner}
             for r in sorted((r for r in code_recs if r.commits_year), key=lambda r: (-r.commits_year, -r.code))[:top]
         ],
         "cleanup": {
@@ -126,6 +204,8 @@ def build_report(a: Analysis, full: bool = False) -> dict:
                     "confidence": r.confidence,
                     "last_commit": r.last_commit,
                     "commits_year": r.commits_year,
+                    "owner": r.owner,
+                    "owner_idle_days": r.owner_idle_days,
                     "notes": r.notes,
                 }
                 for r in sorted(orphans, key=lambda r: (_CONFIDENCE_RANK.get(r.confidence or "low", 2), -r.code, r.path))

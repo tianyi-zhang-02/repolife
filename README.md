@@ -2,10 +2,11 @@
 
 **Which parts of a repository are alive?**
 
-repolife reads a repository and reports three things in one pass: how much code there is,
-how recently each file changed, and whether anything still reaches it. It is built for coding
-agents (stable JSON, an agent skill, a `why` command to verify every claim) and is just as
-readable by a person.
+repolife reads a repository and reports four things in one pass: how much code there is,
+how recently each file changed, whether anything still reaches it, and who has been maintaining it.
+It is built for coding agents (stable JSON, an agent skill, a `why` command to verify every claim)
+and is just as readable by a person. When a codebase outgrows what anyone can review, it answers
+where the volume is, what is unused, and which corners nobody looks after.
 
 - **Zero dependencies.** Pure Python 3.11+ standard library.
 - **Mounts into any repo** in one command, existing or brand new: `repolife init`.
@@ -13,6 +14,8 @@ readable by a person.
 - **Config-aware.** Understands that code is wired by name, not only by `import`: hydra
   `_target_`, console-script entry points, `python scripts/x.py` in CI, registries filled by
   `import_module(f"pkg.{name}")` loops, tsconfig `paths`, `package.json` entries, Next.js pages, `import.meta.glob`.
+- **Knows who looks after what.** Owners come from git history (and are compared with `CODEOWNERS`),
+  and code whose maintainers have all gone quiet is listed as needing an owner.
 - **Honest about what it cannot see.** Languages without an analyzer get volume and activity,
   never a guessed verdict. Every orphan carries a confidence and the reasons it might still be wanted.
 - **Never edits code.**
@@ -26,7 +29,7 @@ repolife scan . --format json   # machine-readable
 repolife why path/to/file.py    # the evidence behind one verdict
 ```
 
-No install at all: build a single 110 KB file and drop it into any repository.
+No install at all: build a single 140 KB file and drop it into any repository.
 
 ```bash
 mkdir build && cp -r repolife build/       # from a checkout of this repository
@@ -120,6 +123,44 @@ Deliberately **not** evidence of use, for any language: tool configs that merely
 `mypy.ini`, `.coveragerc`, lint sections), JSON data, docs, and anything under `docs/`/`reports/`.
 Docs and data count as a *mention*, which lowers confidence but does not rescue a file.
 
+## Who maintains it
+
+Ownership is read from git. Each commit credits its author with the files it touched, and a commit
+loses half its weight per year, so a file's owner is whoever has been maintaining it lately, not whoever
+wrote it first. An owner counts as **gone** after `owner_inactive_days` (180) without a commit anywhere in the
+repository. A file or directory with no active person holding at least 20% of the maintenance has
+**no active owner**.
+
+```text
+$ repolife why legacy/old.py
+legacy/old.py  (Python, 2 code lines)
+status:        DORMANT
+reachability:  reachable from a production entry point
+owners:        Bob Brown 100% (silent 800d); NO ACTIVE OWNER
+CODEOWNERS:    @someone-else (none of them maintains it)
+```
+
+The report's ownership section answers the questions a large codebase makes hard:
+
+| Question | Where |
+|---|---|
+| Who maintains each directory, and are they still around? | table of directories: owners, share, `silent Nd`, state |
+| What live code has nobody looking after it? | "Live code nobody active maintains", largest first |
+| How concentrated is knowledge? | `bus_factor`: the fewest people who together hold half the code |
+| Who should I ask before deleting an orphan? | an `Owner` column on every cleanup candidate |
+| Does `CODEOWNERS` match reality? | files with no declared owner, and files whose declared owner is not among their maintainers |
+
+A directory nobody clearly owns is shown honestly, e.g. `Dana 10% + 25 others`. Bots (`[bot]`,
+dependabot, renovate, github-actions) never own code, and neither do authors matching `ignore_authors`.
+A commit touching 300 or more files (a reformat, a vendor drop) is ignored for ownership unless it is all
+a file has. Authors are matched by name, so one person committing from two addresses is one author; add a
+`.mailmap` for anything this gets wrong. Emails are used to identify people and never appear in a report.
+
+`CODEOWNERS` is read from `.github/`, the root, `docs/` or `.gitlab/` (first found), last matching rule wins.
+A declared `@login` can be compared with the people who maintain a file only when they commit from a GitHub
+noreply address, and git knows nothing about `@org/team`, so those comparisons are reported as undecidable
+rather than as a mismatch.
+
 ## Configuration
 
 `.repolife.toml` (or `[tool.repolife]` in `pyproject.toml`); every flag has a CLI equivalent.
@@ -130,6 +171,8 @@ dormant_days = 365
 keep = ["src/mypkg/api/*"]    # public API, plugins: never reported as orphans
 exclude = ["vendor/*"]        # skipped entirely
 entry = ["mypkg.cli"]         # extra entry points (module or path)
+owner_inactive_days = 180     # no commit anywhere in the repository for this long => no longer an owner
+ignore_authors = ["ci-*"]     # author name or email globs that never own code
 ```
 
 If the repository is a library, modules that only outside users import will look orphaned.
@@ -139,8 +182,10 @@ List them under `keep`.
 
 `repolife scan --format json` prints one object, versioned by `schema_version` (currently `1`; adding
 fields does not bump it). Top-level keys: `summary` (sizes, `by_status`, `orphans`, `test_only`,
-`reachability_coverage`), `languages`, `directories`, `largest_files`, `hotspots`, `cleanup`
-(`orphan_files`, `test_only_files`), `analysis`, `caveats`, and with `--full` a per-file `files` table.
+`reachability_coverage`), `languages`, `directories` (with `owners` and `ownership` per directory), `ownership`
+(`authors`, `bus_factor`, `no_active_owner`, `top_authors`, `needs_owner_files`, `codeowners`; `{"available": false}`
+without git), `largest_files`, `hotspots`, `cleanup` (`orphan_files` with `owner`, `test_only_files`), `analysis`,
+`caveats`, and with `--full` a per-file `files` table.
 
 ## Supporting another language
 
@@ -166,6 +211,10 @@ Two reference implementations, written against the same interface: `repolife/ana
   inside a template literal's `${}`, and scripts in extensionless hook files such as `.husky/pre-commit`.
 - Git activity needs history: a shallow clone truncates it, and a repository with no commits yet
   reports statuses as `UNKNOWN`. Renames are not followed.
+- Ownership says who has been *changing* code, not who is accountable, and git cannot tell who *reviewed* it.
+  Squash merges credit the person who merged, a person with different names on different machines counts as
+  several, and two people with one name count as one. Work done in another repository or before a history
+  rewrite is invisible. Read it as a prompt to ask, not as an assignment.
 - Symbol-level dead code (unused functions inside live files) is out of scope; use a tool like
   [vulture](https://github.com/jendrikseipp/vulture). For multi-language dead-code detection see
   [fossil-mcp](https://docs.rs/crate/fossil-mcp/latest/source/README.md); for churn x complexity on
