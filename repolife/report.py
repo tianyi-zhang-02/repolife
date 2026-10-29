@@ -9,10 +9,9 @@ from datetime import datetime, timezone
 from . import __version__
 from .analyze import Analysis
 from .model import SCHEMA_VERSION, STATUSES
-from .ownership import UNKNOWN, UNOWNED, Owner, bus_factor, rollup
+from .ownership import LISTED_OWNERS, UNKNOWN, UNOWNED, bus_factor, owner_rows, rollup
 
 _CONFIDENCE_RANK = {"high": 0, "medium": 1, "low": 2}
-_LISTED_OWNERS = 3  # owners shown per file or directory
 
 
 def _pct(part: int, whole: int) -> float:
@@ -21,10 +20,6 @@ def _pct(part: int, whole: int) -> float:
 
 def _dir_key(path: str, depth: int) -> str:
     return "/".join(path.split("/")[:-1][:depth]) or "."
-
-
-def _owner_rows(owners: list[Owner]) -> list[dict]:
-    return [{"name": o.name, "share": round(100 * o.share), "idle_days": o.idle_days} for o in owners[:_LISTED_OWNERS]]
 
 
 def _ownership_section(a: Analysis, code_recs: list) -> dict:
@@ -72,7 +67,7 @@ def _ownership_section(a: Analysis, code_recs: list) -> dict:
             "uncovered": {"files": len(uncovered), "code": sum(r.code for r in uncovered), "share": _pct(sum(r.code for r in uncovered), sum(r.code for r in live))},
             "differs": {"files": len(differs), "code": sum(r.code for r in differs)},
             "uncovered_files": [{"path": r.path, "code": r.code, "owner": r.owner} for r in sorted(uncovered, key=lambda r: (-r.code, r.path))[:top]],
-            "differing_files": [{"path": r.path, "code": r.code, "declared": (r.declared_owners or [])[:_LISTED_OWNERS], "observed": r.owner} for r in differs[:top]],
+            "differing_files": [{"path": r.path, "code": r.code, "declared": (r.declared_owners or [])[:LISTED_OWNERS], "observed": r.owner} for r in differs[:top]],
         }
     return section
 
@@ -121,7 +116,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
     if a.ownership is not None:
         for key, row in directories.items():
             area = rollup(a.ownership, dir_files[key])
-            row["owners"] = _owner_rows(area.owners)
+            row["owners"] = owner_rows(area.owners)
             row["contributors"] = sum(lines * 100 >= area.code for lines in area.lines.values())  # people with at least 1% of the code
             row["ownership"] = area.state
             row["no_active_owner_code"] = sum(c for p, c in dir_files[key] if a.records[p].ownership == UNOWNED)

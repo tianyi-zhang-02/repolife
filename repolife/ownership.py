@@ -20,6 +20,7 @@ OWNED, UNOWNED, UNKNOWN = "owned", "no-active-owner", "unknown"
 
 ACTIVE_SHARE_MIN = 0.20  # people still active must hold this much of the maintenance for a file or area to count as owned
 LISTED_MIN = 0.10  # owners below this share are left out of lists (the largest one is always listed)
+LISTED_OWNERS = 3  # owners shown per file or directory
 CODEOWNERS_PATHS = (".github/CODEOWNERS", "CODEOWNERS", "docs/CODEOWNERS", ".gitlab/CODEOWNERS")  # first one found wins
 
 _NOREPLY = re.compile(r"^(?:\d+\+)?([^@+]+)@users\.noreply\.github\.com$", re.I)
@@ -93,6 +94,11 @@ def rollup(own: Ownership, items: Iterable[tuple[str, int]]) -> Area:
             lines[who] += code * share
     shares = {who: n / attributed for who, n in lines.items()} if attributed else {}
     return Area(own.owners(shares), own.state(shares), attributed, unattributed, dict(lines))
+
+
+def owner_rows(owners: list[Owner], limit: int = LISTED_OWNERS) -> list[dict]:
+    """Owners as report rows: names and percentages only, never addresses."""
+    return [{"name": o.name, "share": round(100 * o.share), "idle_days": o.idle_days} for o in owners[:limit]]
 
 
 def bus_factor(area: Area) -> int:

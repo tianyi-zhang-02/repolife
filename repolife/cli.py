@@ -1,4 +1,4 @@
-"""Command line entry point: `repolife scan | why | init`."""
+"""Command line entry point: `repolife scan | why | graph | impact | init`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, config
+from . import __version__, config, graphview, modules
 from .analyze import analyze
 from .explain import TargetError, explain
 from .render import markdown
@@ -29,6 +29,13 @@ def _add_analysis_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--top", type=int, metavar="N", help="rows in the largest-files and hotspots tables (default 15)")
 
 
+def _positive(text: str) -> int:
+    value = int(text)
+    if value < 1:
+        raise argparse.ArgumentTypeError("must be at least 1")
+    return value
+
+
 def _config_for(root: Path, args: argparse.Namespace) -> config.Config:
     cfg = config.load(root)
     for key in ("active_days", "dormant_days", "owner_inactive_days", "depth", "top"):
@@ -48,18 +55,21 @@ def _root(path: str) -> Path:
     return root.resolve()
 
 
-def _cmd_scan(args: argparse.Namespace) -> int:
-    root = _root(args.path)
-    analysis = analyze(root, _config_for(root, args))
-    report = build_report(analysis, full=args.full)
-    text = json.dumps(report, indent=2) + "\n" if args.format == "json" else markdown(report, args.limit)
-    if args.out:
-        out = Path(args.out)
+def _emit(text: str, out_path: str | None) -> None:
+    if out_path:
+        out = Path(out_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
         print(f"repolife: wrote {out}", file=sys.stderr)
     else:
         sys.stdout.write(text)
+
+
+def _cmd_scan(args: argparse.Namespace) -> int:
+    root = _root(args.path)
+    analysis = analyze(root, _config_for(root, args))
+    report = build_report(analysis, full=args.full)
+    _emit(json.dumps(report, indent=2) + "\n" if args.format == "json" else markdown(report, args.limit), args.out)
     return 0
 
 
@@ -71,6 +81,36 @@ def _cmd_why(args: argparse.Namespace) -> int:
     except TargetError as exc:
         print(f"repolife: {exc}", file=sys.stderr)
         return 2
+    return 0
+
+
+def _cmd_graph(args: argparse.Namespace) -> int:
+    root = _root(args.path)
+    if args.level == "file" and args.format != "json":
+        print("repolife: --level file is only available as --format json (a file-level picture is too large to read)", file=sys.stderr)
+        return 2
+    graph = modules.build_graph(analyze(root, _config_for(root, args)), args.module_depth, args.include_tests, args.level)
+    if args.format == "json":
+        text = json.dumps(graph, indent=2) + "\n"
+    elif args.format == "mermaid":
+        text = graphview.mermaid(graph, args.min_imports)
+    elif args.format == "dot":
+        text = graphview.dot(graph, args.min_imports)
+    else:
+        text = graphview.markdown(graph, args.limit)
+    _emit(text, args.out)
+    return 0
+
+
+def _cmd_impact(args: argparse.Namespace) -> int:
+    root = _root(args.repo)
+    analysis = analyze(root, _config_for(root, args))
+    try:
+        found = modules.impact(analysis, args.target, args.module_depth, hops=args.hops)
+    except TargetError as exc:
+        print(f"repolife: {exc}", file=sys.stderr)
+        return 2
+    _emit(json.dumps(found, indent=2) + "\n" if args.format == "json" else graphview.impact_text(found), args.out)
     return 0
 
 
@@ -107,6 +147,28 @@ def build_parser() -> argparse.ArgumentParser:
     why.add_argument("--repo", default=".", help="repository root (default: .)")
     _add_analysis_options(why)
     why.set_defaults(func=_cmd_why)
+
+    graph = sub.add_parser("graph", help="module dependency graph: who imports whom, cycles, owners")
+    graph.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
+    graph.add_argument("--format", choices=("md", "json", "mermaid", "dot"), default="md")
+    graph.add_argument("--level", choices=("module", "file"), default="module", help="file: every import as a pair, json only (default: module)")
+    graph.add_argument("--module-depth", type=_positive, metavar="N", help="a module is the first N directories of a path (default: split by size)")
+    graph.add_argument("--include-tests", action="store_true", help="draw test files too (hidden by default: every module is imported by its tests)")
+    graph.add_argument("--min-imports", type=_positive, metavar="N", help="mermaid, dot: leave out dependencies made of fewer than N imports (default: as many as fit about 80 arrows)")
+    graph.add_argument("--out", metavar="FILE", help="write the graph to FILE instead of stdout")
+    graph.add_argument("--limit", type=int, default=40, metavar="N", help="md: rows per table (default 40)")
+    _add_analysis_options(graph)
+    graph.set_defaults(func=_cmd_graph)
+
+    impact = sub.add_parser("impact", help="what a change to one file or directory can reach: dependents, tests, owners")
+    impact.add_argument("target", help="file path, directory, or dotted package name")
+    impact.add_argument("--repo", default=".", help="repository root (default: .)")
+    impact.add_argument("--format", choices=("text", "json"), default="text")
+    impact.add_argument("--hops", type=_positive, metavar="N", help="follow imports at most N steps away (default: all of them)")
+    impact.add_argument("--module-depth", type=_positive, metavar="N", help="group dependents by the first N directories (default: split by size)")
+    impact.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
+    _add_analysis_options(impact)
+    impact.set_defaults(func=_cmd_impact)
 
     init = sub.add_parser("init", help="mount repolife into a repository: config, agent skill, AGENTS.md block, optional CI")
     init.add_argument("path", nargs="?", default=".", help="repository root (default: .)")

@@ -4,6 +4,9 @@ The reachability engine (graph.py) knows nothing about any language. It consumes
 `LanguageResult` that an analyzer returns for the files it handles:
 
   edges      file -> files it depends on (imports, includes, requires ...)
+  indirect   optional: the part of `edges` that no import statement makes: a parent package that runs as a
+             side effect of `import a.b.c`, a name in a string, a dynamic import. Reachability counts these;
+             the module graph does not
   roots      file -> why it is an entry point (script guard, main(), CLI entry ...)
   tests      files that are tests; code reached only from these is "test-only"
   unparsed   files the analyzer could not parse; they are treated as entry points
@@ -39,6 +42,7 @@ class Repo:
 @dataclass
 class LanguageResult:
     edges: dict[str, set[str]] = field(default_factory=dict)
+    indirect: dict[str, set[str]] = field(default_factory=dict)  # edges that no import statement makes; see above
     roots: dict[str, list[str]] = field(default_factory=dict)
     tests: set[str] = field(default_factory=set)
     unparsed: set[str] = field(default_factory=set)

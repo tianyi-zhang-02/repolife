@@ -1,12 +1,13 @@
 ---
 name: repolife
-description: Check which parts of a repository are alive and who maintains them before refactoring, cleaning up or asking for a review - code volume, git activity, unreachable (orphan) files and code nobody active owns. Use when asked about dead or unused code, repository health, what is safe to delete, who owns or should review a path, or where to start a cleanup.
+description: Check which parts of a repository are alive, how its modules depend on each other and who maintains them before refactoring, cleaning up or asking for a review - code volume, git activity, unreachable (orphan) files, import cycles, what a change can break, and code nobody active owns. Use when asked about dead or unused code, repository health, what is safe to delete, what depends on a file, how modules relate, who owns or should review a path, or where to start a cleanup.
 ---
 
 # repolife
 
-repolife reports four things about a repository: how much code there is, how recently it
-changed, whether anything still reaches it, and who has been maintaining it. It only reads; it never edits code.
+repolife reports five things about a repository: how much code there is, how recently it
+changed, whether anything still reaches it, who has been maintaining it, and how its modules depend on
+each other. It only reads; it never edits code.
 
 ## Run it
 
@@ -14,12 +15,33 @@ changed, whether anything still reaches it, and who has been maintaining it. It 
 repolife scan . --format json --out .repolife/report.json
 ```
 
-If `repolife` is not on PATH, use `python3 -m repolife ...` or `uvx repolife ...`.
+If `repolife` is not on PATH, use `python3 -m repolife ...` or `uvx --from git+https://github.com/tianyi-zhang-02/repolife repolife ...`.
 Add `--format md` (the default) for a report meant to be read by a person.
 
 Read in this order: `summary` (sizes, status counts, orphan share), `cleanup.orphan_files`,
 `cleanup.test_only_files`, then `hotspots` and `directories` for where change is concentrated,
 and `ownership` for who maintains what.
+
+## Dependencies and blast radius
+
+```bash
+repolife graph . --format json --out .repolife/graph.json
+repolife impact <file-or-directory>
+```
+
+`graph` rolls the import graph up into modules (directories, split by size; `--module-depth N` fixes the
+depth). Read `cycles` first: modules that depend on each other cannot be understood or released alone, and
+each cycle lists the dependencies to cut or invert to break it (`cut`, with an example import to look at).
+`modules[].used_by` is how many modules depend on one: a change in a module with a high `used_by` needs
+more care. `--level file` gives every import as a pair, `--format mermaid` or `dot` draws the modules.
+
+Before changing a widely used file, run `repolife impact <path>`. `dependents` are the code files that import
+it directly or through others (`by_distance` says how far; `--hops 1` keeps only direct importers),
+`tests.paths` are the tests that reach it (run those), `owners` are the people who maintain the affected code
+(tell them), and `depends_on` is what it relies on.
+
+Edges are static imports. Importing `a.b.c` does not make a file depend on the package `a`; names in strings,
+dynamic imports and registries are not edges, so a missing edge is not proof that nothing depends on a file.
 
 ## Ownership
 

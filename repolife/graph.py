@@ -36,6 +36,7 @@ def _bfs(roots: Iterable[str], edges: Mapping[str, set[str]], skip: str | None =
 class Graph:
     analyzed: set[str] = field(default_factory=set)
     edges: dict[str, set[str]] = field(default_factory=dict)
+    indirect: dict[str, set[str]] = field(default_factory=dict)  # part of `edges` that no import statement makes; see LanguageResult
     roots: dict[str, list[str]] = field(default_factory=dict)  # entry points -> reasons; never test files
     tests: set[str] = field(default_factory=set)
     config_refs: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))  # file -> configs/scripts naming it
@@ -83,6 +84,8 @@ def build(
     for res in results:
         for path, targets in res.edges.items():
             g.edges.setdefault(path, set()).update(targets)
+        for path, targets in res.indirect.items():
+            g.indirect.setdefault(path, set()).update(targets)
         for path, why in res.roots.items():
             g.roots.setdefault(path, []).extend(why)
         g.tests |= res.tests

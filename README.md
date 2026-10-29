@@ -6,7 +6,8 @@ repolife reads a repository and reports four things in one pass: how much code t
 how recently each file changed, whether anything still reaches it, and who has been maintaining it.
 It is built for coding agents (stable JSON, an agent skill, a `why` command to verify every claim)
 and is just as readable by a person. When a codebase outgrows what anyone can review, it answers
-where the volume is, what is unused, and which corners nobody looks after.
+where the volume is, what is unused, and which corners nobody looks after. Two more commands read the same
+import graph: `graph` shows how the modules depend on each other, and `impact` shows what a change can reach.
 
 - **Zero dependencies.** Pure Python 3.11+ standard library.
 - **Mounts into any repo** in one command, existing or brand new: `repolife init`.
@@ -16,6 +17,9 @@ where the volume is, what is unused, and which corners nobody looks after.
   `import_module(f"pkg.{name}")` loops, tsconfig `paths`, `package.json` entries, Next.js pages, `import.meta.glob`.
 - **Knows who looks after what.** Owners come from git history (and are compared with `CODEOWNERS`),
   and code whose maintainers have all gone quiet is listed as needing an owner.
+- **Shows the structure.** `repolife graph` rolls imports up into modules, finds the cycles and the few
+  dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests to run and who
+  maintains the affected code. Static imports only, no model in the loop.
 - **Honest about what it cannot see.** Languages without an analyzer get volume and activity,
   never a guessed verdict. Every orphan carries a confidence and the reasons it might still be wanted.
 - **Never edits code.**
@@ -27,9 +31,11 @@ pip install git+https://github.com/tianyi-zhang-02/repolife   # or run once: uvx
 repolife scan .                 # markdown report
 repolife scan . --format json   # machine-readable
 repolife why path/to/file.py    # the evidence behind one verdict
+repolife graph .                # how modules depend on each other, and the cycles
+repolife impact path/to/file.py # what a change can reach, the tests to run, who to tell
 ```
 
-No install at all: build a single 140 KB file and drop it into any repository.
+No install at all: build a single 170 KB file and drop it into any repository.
 
 ```bash
 mkdir build && cp -r repolife build/       # from a checkout of this repository
@@ -161,6 +167,70 @@ A declared `@login` can be compared with the people who maintain a file only whe
 noreply address, and git knows nothing about `@org/team`, so those comparisons are reported as undecidable
 rather than as a mismatch.
 
+## How the modules fit together
+
+`repolife graph` rolls the file-level import graph up into modules. A module is a directory; unless you pass
+`--module-depth N`, directories are split until none holds much more than a twelfth of the code files, so one
+big package still shows its parts. Test files are left out (every module is imported by its tests); add
+`--include-tests` to draw them.
+
+```text
+$ repolife graph
+**4 modules**, **5 dependencies** between them and **1 cycle**, from 5 imports across 8 code files. ...
+
+**Cycle 1**: `billing` ⇄ `core`. 2 imports among them; 1 dependency (1 import) to cut:
+
+| From | To | Imports | For example |
+|---|---|---:|---|
+| `core` | `billing` | 1 | `core/engine.py` imports `billing/invoices.py` |
+
+| Module | Files | Code | Uses | Used by | Cycle |
+|---|---:|---:|---:|---:|---|
+| `billing` | 2 | 5 | 1 | 2 | 1 |
+| `core` | 2 | 4 | 2 | 2 | 1 |
+| `util` | 2 | 2 | 0 | 1 | - |
+| `app` | 2 | 5 | 2 | 0 | - |
+```
+
+| Output | What it gives |
+|---|---|
+| `repolife graph` | Markdown: cycles, then modules (size, *uses*, *used by*, owners), then the heaviest dependencies |
+| `--format json` | `modules` (with `uses`, `used_by`, `instability`, `owners`, `cycle`), `edges` (`imports`, `files`, example imports, `cut`), `cycles` |
+| `--format mermaid` / `dot` | a diagram of the heaviest ~80 dependencies, cuts drawn red; `--min-imports N` to choose the threshold |
+| `--level file --format json` | every import as a `[from, to]` pair, each file with its module, status and owner |
+
+An *import* is one file importing one other file, so `from pkg import a, b` counts twice. Only what an import
+statement names is an edge: importing `a.b.c` also runs `a/__init__.py`, which keeps that file reachable but
+does not make the importer depend on the package, and paths or dotted names found in strings, config or
+dynamic imports are not edges either.
+
+A cycle comes with a list of the dependencies that point against its dominant direction. Removing or
+inverting exactly those leaves no cycle, and putting any one back makes one again. It is a heuristic for a few,
+light edges (the true minimum is NP-hard), but it is deterministic, and the tests check it is acyclic and
+irredundant.
+
+```text
+$ repolife impact util/helpers.py
+Changing util/helpers.py  (1 file, 2 code lines) can affect:
+
+- **3 code files** in **3 modules** (37.5% of the code), 1 of them importing it directly
+- **1 test file**, 0 importing it directly
+- code files by number of imports away: 1: 1, 2: 2
+
+| Affected module | Files | Direct |
+|---|---:|---:|
+| `app` | 1 | 0 |
+| `billing` | 1 | 0 |
+| `core` | 1 | 1 |
+
+Tests that reach it, nearest first: `tests/test_engine.py`
+```
+
+`impact` takes a file, a directory or a dotted package name and follows imports backwards, through cycles
+without looping. With git history it also lists who maintains the affected code, which is who to tell or
+ask for a review. `--hops 1` keeps only direct importers. A package `__init__` is affected by any import
+beneath it, because Python runs it.
+
 ## Configuration
 
 `.repolife.toml` (or `[tool.repolife]` in `pyproject.toml`); every flag has a CLI equivalent.
@@ -187,6 +257,9 @@ fields does not bump it). Top-level keys: `summary` (sizes, `by_status`, `orphan
 without git), `largest_files`, `hotspots`, `cleanup` (`orphan_files` with `owner`, `test_only_files`), `analysis`,
 `caveats`, and with `--full` a per-file `files` table.
 
+`repolife graph --format json` and `repolife impact --format json` print their own objects (`kind` is `module-graph`,
+`file-graph`, or has `target` for an impact) with the same `schema_version`.
+
 ## Supporting another language
 
 The engine in `repolife/graph.py` knows nothing about any language. An analyzer maps files to
@@ -211,6 +284,10 @@ Two reference implementations, written against the same interface: `repolife/ana
   inside a template literal's `${}`, and scripts in extensionless hook files such as `.husky/pre-commit`.
 - Git activity needs history: a shallow clone truncates it, and a repository with no commits yet
   reports statuses as `UNKNOWN`. Renames are not followed.
+- The module graph is static imports between Python and JavaScript/TypeScript files. A package that re-exports
+  everything (a busy `__init__.py` or `index.ts`) makes the modules importing through it look more tangled than
+  their real call graph, and registries, dependency injection and dynamic loading leave no edge, so a missing
+  dependency is not proof there is none.
 - Ownership says who has been *changing* code, not who is accountable, and git cannot tell who *reviewed* it.
   Squash merges credit the person who merged, a person with different names on different machines counts as
   several, and two people with one name count as one. Work done in another repository or before a history

@@ -208,22 +208,35 @@ class PythonAnalyzer(Analyzer):
                     found.update(index.get(f"{base}.{ident}" if base else ident, ()))
             return found
 
-        def targets(info: _Info, imp: _Import) -> set[str]:
+        def targets(info: _Info, imp: _Import) -> tuple[set[str], set[str]]:
+            """(every file the import runs, the ones the statement itself names)."""
             full = qualify(info, imp.level, imp.module)
             if full is None:
-                return set()
+                return set(), set()
+            named: set[str] = set()
             found = chain(full) if full else set()
+            symbols = not imp.names  # `import a.b` and `from a import *` use the module itself
             for name in imp.names:
-                sub = f"{full}.{name}" if full else name
-                found.update(index.get(sub, ()))
-            return found
+                hit = index.get(f"{full}.{name}" if full else name, ())
+                if hit:
+                    named.update(hit)
+                    found.update(hit)
+                else:
+                    symbols = True  # a name defined in the module, not a submodule
+            if symbols and full:
+                named.update(index.get(full, ()))
+            return found, named
 
         paths = PathIndex(pyset)
         edges: dict[str, set[str]] = {}
+        indirect: dict[str, set[str]] = {}
         for path, info in infos.items():
             found: set[str] = set()
+            imported: set[str] = set()  # what the import statements name, as opposed to what they run on the way
             for imp in info.imports:
-                found |= targets(info, imp)
+                ran, said = targets(info, imp)
+                found |= ran
+                imported |= said
             for ref in info.dotted:
                 found |= resolve_reference(ref)
             for token in info.paths:
@@ -231,6 +244,7 @@ class PythonAnalyzer(Analyzer):
             found |= dynamic_targets(info)
             found.discard(path)
             edges[path] = found
+            indirect[path] = found - imported
 
         tests = {p for p in pyset if is_test_path(p)}
         roots: dict[str, list[str]] = {}
@@ -247,6 +261,7 @@ class PythonAnalyzer(Analyzer):
 
         return LanguageResult(
             edges=edges,
+            indirect=indirect,
             roots=roots,
             tests=tests,
             unparsed=unparsed,
