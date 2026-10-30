@@ -22,6 +22,7 @@ def _add_analysis_options(p: argparse.ArgumentParser) -> None:
     p.add_argument("--dormant-days", type=int, metavar="N", help="untouched for N days and barely used => DORMANT (default 365)")
     p.add_argument("--owner-inactive-days", type=int, metavar="N", help="an author silent in the whole repository for N days no longer counts as an owner (default 180)")
     p.add_argument("--ignore-author", dest="ignore_authors", action="append", default=[], metavar="GLOB", help="never credit commits whose author name or email matches (repeatable; bots are ignored already)")
+    p.add_argument("--review-days", type=_non_negative, metavar="N", help="review load: changes in the last N days against the N before (default 30, 0 turns it off)")
     p.add_argument("--keep", action="append", default=[], metavar="GLOB", help="never report matching files as orphans (repeatable)")
     p.add_argument("--exclude", action="append", default=[], metavar="GLOB", help="skip matching files entirely (repeatable)")
     p.add_argument("--entry", action="append", default=[], metavar="MODULE_OR_PATH", help="extra entry point (repeatable)")
@@ -36,9 +37,16 @@ def _positive(text: str) -> int:
     return value
 
 
+def _non_negative(text: str) -> int:
+    value = int(text)
+    if value < 0:
+        raise argparse.ArgumentTypeError("must not be negative")
+    return value
+
+
 def _config_for(root: Path, args: argparse.Namespace) -> config.Config:
     cfg = config.load(root)
-    for key in ("active_days", "dormant_days", "owner_inactive_days", "depth", "top"):
+    for key in ("active_days", "dormant_days", "owner_inactive_days", "review_days", "depth", "top"):
         value = getattr(args, key)
         if value is not None:
             setattr(cfg, key, value)

@@ -19,6 +19,8 @@ import graph: `graph` shows how the modules depend on each other, and `impact` s
   and code whose maintainers have all gone quiet is listed as needing an owner.
 - **One page to open.** `repolife scan --format html` writes a single self-contained file (no network, works
   offline, light and dark): the overview, the module graph, an impact explorer, owners and cleanup candidates.
+- **Counts the review the changes ask for.** How much code changed lately, where, by whom, and whether anyone who knows
+  that code is still around to look at it.
 - **Shows the structure.** `repolife graph` rolls imports up into modules, finds the cycles and the few
   dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests to run and who
   maintains the affected code. Static imports only, no model in the loop.
@@ -38,7 +40,7 @@ repolife graph .                # how modules depend on each other, and the cycl
 repolife impact path/to/file.py # what a change can reach, the tests to run, who to tell
 ```
 
-No install at all: build a single 230 KB file and drop it into any repository.
+No install at all: build a single 260 KB file and drop it into any repository.
 
 ```bash
 mkdir build && cp -r repolife build/       # from a checkout of this repository
@@ -170,6 +172,53 @@ A declared `@login` can be compared with the people who maintain a file only whe
 noreply address, and git knows nothing about `@org/team`, so those comparisons are reported as undecidable
 rather than as a mismatch.
 
+## Review load
+
+When a codebase grows faster than anyone can read it, the useful question is how much review the recent changes ask
+for, and from whom. Every report has a `review` section for the last `review_days` days (30) against the same number
+of days before:
+
+| Question | Where |
+|---|---|
+| How much code changed, and is that more than before? | lines added plus deleted in code files, with the change against the previous window |
+| Where did it change? | areas (directories, split by size like the modules), with commits, people and the change per area |
+| Who made the changes? | per area: who changed it, and *by outsiders*, the share of the people's lines written by someone who is not among the area's owners |
+| Did it land where nobody can look? | lines that landed in areas with no active owner |
+| Who is it landing on? | the people who maintain the areas that others changed, by lines from others, with those who went quiet marked |
+| What is hardest to review? | the largest single commits, with their subject and the area they mostly touched |
+
+```text
+$ repolife scan . --review-days 30
+## Review load
+
+- **19** lines changed in code files (+533% against 3 before), in 4 commits across 3 areas by 2 people
+- 2 of those lines came from bots or ignored authors
+- **2** lines (10.5%) landed in 1 area that nobody active maintains: nobody who knows that code is around to look
+
+| Area | Changed lines | Against before | Commits | People | By outsiders | Owners | State |
+|---|---:|---:|---:|---:|---:|---|---|
+| `core` | 10 | +233% | 2 | 2 | 40.0% | Alice Adams 94% | owned |
+| `web` | 7 | new | 1 | 1 | 0.0% | Carol Chen 100% | owned |
+| `legacy` | 2 | new | 1 | 0 | - | Bob Brown 100% (silent 290d) | no active owner |
+
+| Person | Lines from others | Areas | State |
+|---|---:|---:|---|
+| Alice Adams | 4 | 1 | active |
+| Bob Brown | 2 | 1 | silent for 290 days |
+```
+
+This measures *demand* for review. Git records who changed code, not who reviewed it, so nothing here says a change
+was or was not looked at. Only code files count: configuration and docs are summed apart, and files the scan
+leaves out (`node_modules`, lock files, generated code, anything under `exclude`) are ignored. Bots and
+`ignore_authors` still count as changes that need a look but never as people. A commit touching 300 or more files
+(a reformat, a vendor drop) is left out of the areas and reported under `totals.bulk`, since nobody reads it line by
+line. The window is cut by author date, so a rebased commit keeps the date it was written. In the HTML report the
+section has a bar per area split into changes by an owner, by someone else, and by bots.
+
+*By outsiders* leans on who counts as an owner, which is everyone holding at least 10% of an area's recent
+maintenance. Where ownership is spread thin, most changes are by "outsiders" simply because the owners are many and
+each holds little; read it together with the *Owners* column.
+
 ## How the modules fit together
 
 `repolife graph` rolls the file-level import graph up into modules. A module is a directory; unless you pass
@@ -251,6 +300,7 @@ filtering, highlighting in the module graph and the impact explorer.
 | Directories | size, status mix and owners per directory; click a heading to sort |
 | Modules | the dependency graph (users on the left, what they build on to the right, cuts that break a cycle in red; click a module to highlight what it uses and what uses it), the cycles with their cut lists, and every module in a table |
 | Impact | type any file or directory: the code that imports it directly or through others, the tests that reach it, and who owns the affected files |
+| Review load | a bar per area for the lines changed, split by an owner, someone else and bots; who the changes land on; the largest changes |
 | Ownership, hotspots, cleanup | the same tables as the Markdown report, with filters on the long ones |
 
 The impact explorer walks the import graph embedded in the page, and the tests check that it gives the same
@@ -270,6 +320,7 @@ keep = ["src/mypkg/api/*"]    # public API, plugins: never reported as orphans
 exclude = ["vendor/*"]        # skipped entirely
 entry = ["mypkg.cli"]         # extra entry points (module or path)
 owner_inactive_days = 180     # no commit anywhere in the repository for this long => no longer an owner
+review_days = 30              # review load: changes in this many days against the same number before (0 = off)
 ignore_authors = ["ci-*"]     # author name or email globs that never own code
 ```
 
@@ -282,7 +333,8 @@ List them under `keep`.
 fields does not bump it). Top-level keys: `summary` (sizes, `by_status`, `orphans`, `test_only`,
 `reachability_coverage`), `languages`, `directories` (with `owners` and `ownership` per directory), `ownership`
 (`authors`, `bus_factor`, `no_active_owner`, `top_authors`, `needs_owner_files`, `codeowners`; `{"available": false}`
-without git), `largest_files`, `hotspots`, `cleanup` (`orphan_files` with `owner`, `test_only_files`), `analysis`,
+without git), `review` (`window`, `totals` with `bulk`, `unowned`, `areas`, `authors`, `reviewers`, `largest_changes`;
+`{"available": false}` without git or with `review_days = 0`), `largest_files`, `hotspots`, `cleanup` (`orphan_files` with `owner`, `test_only_files`), `analysis`,
 `caveats`, and with `--full` a per-file `files` table.
 
 `repolife graph --format json` and `repolife impact --format json` print their own objects (`kind` is `module-graph`,
@@ -318,6 +370,9 @@ Two reference implementations, written against the same interface: `repolife/ana
   everything (a busy `__init__.py` or `index.ts`) makes the modules importing through it look more tangled than
   their real call graph, and registries, dependency injection and dynamic loading leave no edge, so a missing
   dependency is not proof there is none.
+- Review load counts lines changed, not effort: a generated file that is not excluded, or a mechanical rename of one
+  symbol, weighs as much as careful work. It cannot see who reviewed, and it follows neither renames nor branches
+  that never reached the history it reads.
 - Ownership says who has been *changing* code, not who is accountable, and git cannot tell who *reviewed* it.
   Squash merges credit the person who merged, a person with different names on different machines counts as
   several, and two people with one name count as one. Work done in another repository or before a history

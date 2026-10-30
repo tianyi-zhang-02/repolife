@@ -33,6 +33,7 @@ class Analysis:
     skipped: dict[str, int]
     unparsed: list[str]
     ownership: Ownership | None = None  # None without git history
+    changes: list[gitlog.Change] | None = None  # commits of the last two review windows; None without git history or with review_days = 0
 
 
 def _day(ts: int) -> str:
@@ -163,6 +164,8 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
     g = graph.build(results, analyzed, scans, cfg.keep, cfg.entry)
     activity = gitlog.load(root, now, cfg.active_days, cfg.ignore_authors) if used_git else None
 
+    changes = gitlog.changes(root, now, cfg.review_days, cfg.ignore_authors) if used_git and cfg.review_days > 0 else None
+
     extra_comments: dict[str, set[int]] = {}
     for res in results:
         extra_comments.update(res.comment_lines)
@@ -199,4 +202,5 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
         skipped=dict(skipped),
         unparsed=sorted(unparsed),
         ownership=owners,
+        changes=changes,
     )

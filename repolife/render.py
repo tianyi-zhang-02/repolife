@@ -87,6 +87,78 @@ def _ownership(own: dict, directories: list[dict], limit: int) -> list[str]:
     return lines
 
 
+def _count(n: int, one: str, many: str | None = None) -> str:
+    return f"{_n(n)} {one if n == 1 else many or one + 's'}"
+
+
+def _delta(now: int, before: int) -> str:
+    if not before:
+        return "new" if now else "-"
+    return f"{round(100 * (now - before) / before):+d}%"
+
+
+def _review(rev: dict, gone: int, limit: int) -> list[str]:
+    t, w = rev["totals"], rev["window"]
+    lines = [
+        "## Review load",
+        "",
+        f"The last {rev['days']} days ({w['from']} to {w['to']}) against the {rev['days']} before. Git records who changed code, not who "
+        "reviewed it, so this is how much review the changes ask for, not how much happened.",
+        "",
+        f"- **{_n(t['lines'])}** lines changed in code files ({_delta(t['lines'], t['previous_lines'])} against {_n(t['previous_lines'])} before), "
+        f"in {_count(t['commits'], 'commit')} across {_count(t['areas'], 'area')} by {_count(t['authors'], 'person', 'people')}",
+    ]
+    if t["automated_lines"]:
+        lines.append(f"- {_n(t['automated_lines'])} of those lines came from bots or ignored authors")
+    unowned = rev["unowned"]
+    if unowned["lines"]:
+        lines.append(f"- **{_n(unowned['lines'])}** lines ({unowned['share']}%) landed in {_count(unowned['areas'], 'area')} that nobody active maintains: nobody who knows that code is around to look")
+    if t["other_lines"]:
+        lines.append(f"- {_n(t['other_lines'])} lines of configuration and docs are not counted")
+    if t["bulk"]["commits"]:
+        lines.append(
+            f"- {_n(t['bulk']['commits'])} commit{'s' if t['bulk']['commits'] != 1 else ''} touching {_n(t['bulk']['threshold'])} or more files ({_n(t['bulk']['lines'])} lines) "
+            "are left out: a reformat or vendor drop is not reviewed line by line"
+        )
+    lines.append("")
+    if not rev["areas"]:
+        return lines + ["No code changed in this window.", ""]
+    lines += ["Where the changes landed (areas are directories, split by size):", ""]
+    lines += _table(
+        ["Area", "Changed lines", "Against before", "Commits", "People", "By outsiders", "Owners", "State"],
+        [
+            [
+                f"`{r['path']}`",
+                _n(r["lines"]),
+                _delta(r["lines"], r["previous_lines"]),
+                _n(r["commits"]),
+                r["authors"],
+                "-" if r["outside_share"] is None else f"{r['outside_share']}%",
+                _owners(r["owners"], gone),
+                _STATE_TEXT[r["ownership"]],
+            ]
+            for r in rev["areas"][:limit]
+        ],
+        {1, 2, 3, 4, 5},
+    )
+    lines += ["*By outsiders* is the share of the people's lines written by someone who is not among the area's owners; those changes are the ones an owner should see.", ""]
+    if rev["reviewers"]:
+        lines += ["Who the changes land on: the people who maintain the areas that others changed, by lines changed by someone else:", ""]
+        lines += _table(
+            ["Person", "Lines from others", "Areas", "State"],
+            [[_cell(r["name"]), _n(r["inbound_lines"]), r["areas"], "active" if r["active"] else f"silent for {r['idle_days']} days"] for r in rev["reviewers"]],
+            {1, 2},
+        )
+    if rev["largest_changes"]:
+        lines += ["Largest changes, the hardest to review:", ""]
+        lines += _table(
+            ["Commit", "Date", "Author", "Lines", "Files", "Mostly in", "Subject"],
+            [[f"`{r['sha']}`", r["date"], _cell(r["author"]), _n(r["lines"]), r["files"], f"`{r['area']}`", _cell(r["subject"])] for r in rev["largest_changes"][:limit]],
+            {3, 4},
+        )
+    return lines
+
+
 def markdown(rep: dict, limit: int = 40) -> str:
     s = rep["summary"]
     git = rep["git"]
@@ -142,6 +214,9 @@ def markdown(rep: dict, limit: int = 40) -> str:
     gone = own.get("inactive_days", 0)
     if own["available"]:
         lines += _ownership(own, rep["directories"], limit)
+
+    if rep["review"]["available"]:
+        lines += _review(rep["review"], gone, limit)
 
     cleanup = rep["cleanup"]
     lines += ["## Cleanup candidates", ""]

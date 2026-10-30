@@ -6,7 +6,8 @@ import fnmatch
 import re
 import subprocess
 from collections.abc import Iterator, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 
 HALF_LIFE_DAYS = 365  # when crediting ownership, a commit loses half its weight per year
@@ -38,6 +39,18 @@ class Activity:
     commits: int
     authors: dict[str, Author]  # identity -> author; bots and ignored authors are left out
     credit: dict[str, dict[str, float]]  # path -> identity -> commits, recent ones weighing more
+
+
+@dataclass
+class Change:
+    """One commit as review work: what it touched and how many lines moved."""
+
+    sha: str  # abbreviated
+    when: int  # epoch seconds, author date
+    identity: str | None  # None for bots and ignored authors: their changes still need review, but they own nothing
+    name: str
+    subject: str
+    files: dict[str, int] = field(default_factory=dict)  # path -> lines added plus deleted (0 for a binary file)
 
 
 def _git_line(root: Path, *args: str) -> str | None:
@@ -151,3 +164,50 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
         authors=authors,
         credit=credit,
     )
+
+
+def _git_text(root: Path, *args: str, stdin: str | None = None) -> str | None:
+    try:
+        res = subprocess.run(
+            ["git", "-c", "core.quotepath=false", "-C", str(root), *args],
+            input=stdin, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=300,
+        )  # fmt: skip
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return res.stdout if res.returncode == 0 else None
+
+
+def changes(root: Path, now: float, days: int, ignore_authors: Sequence[str] = ()) -> list[Change] | None:
+    """Commits of the last `2 * days` days with the lines they moved per file, newest first, for comparing a
+    window with the one before it. The window is cut by author date, like ownership: `git log --since` would
+    stop at the first old-dated commit it meets and silently drop newer ones behind it, so the commits are listed
+    first and the diffs are read only for the ones inside. Merge commits are left out (they carry no diff of
+    their own) and renames are not followed. None when `root` has no usable git history."""
+    cut = now - 2 * days * 86400
+    listing = _git_text(root, "log", "--no-merges", "--format=%H%x09%at")
+    if listing is None:
+        return None
+    inside = [sha for sha, _, stamp in (line.partition("\t") for line in listing.splitlines()) if stamp.isdigit() and int(stamp) >= cut]
+    if not inside:
+        return []
+    body = _git_text(
+        root, "log", "--no-walk=unsorted", "--stdin", "--relative", "--no-renames", "--numstat", "--format=%x1e%h%x09%at%x09%aN%x09%aE%x09%s",
+        stdin="\n".join(inside) + "\n",
+    )  # fmt: skip
+    if body is None:
+        return None
+    found: list[Change] = []
+    current: Change | None = None
+    for line in body.split("\n"):  # not splitlines(): that would also break at the record separator
+        if line.startswith("\x1e"):
+            sha, stamp, name, email, subject = (line[1:].split("\t", 4) + [""] * 5)[:5]
+            person = None if is_ignored(name, email, ignore_authors) else identity(name, email)
+            current = Change(sha, int(stamp) if stamp.isdigit() else 0, person, name, subject)
+            found.append(current)
+        elif line and current is not None:
+            added, _, rest = line.partition("\t")
+            deleted, _, path = rest.partition("\t")
+            if path:
+                moved = int(added) + int(deleted) if added.isdigit() and deleted.isdigit() else 0
+                current.files[path] = current.files.get(path, 0) + moved
+    return found

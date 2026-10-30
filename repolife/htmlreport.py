@@ -19,12 +19,18 @@ from .analyze import Analysis
 from .graphview import drawn
 from .htmlassets import CSS, JS, THEME_BOOT
 from .model import STATUSES
-from .render import _STATE_TEXT, _owners
+from .render import _STATE_TEXT, _count, _owners
 from .report import build_report
 
 _STATUS_NAME = {"ACTIVE": "Active", "STABLE": "Stable", "DORMANT": "Dormant", "ORPHAN": "Orphan", "UNKNOWN": "Unknown"}
 _STATUS_CLASS = {"ACTIVE": "s-active", "STABLE": "s-stable", "DORMANT": "s-dormant", "ORPHAN": "s-orphan"}
 _CHIP = {"high": "chip bad", "medium": "chip warn", "low": "chip"}
+
+
+def _delta(now: int, before: int) -> str:
+    if not before:
+        return "new" if now else "-"
+    return f"{round(100 * (now - before) / before):+d}%"
 
 NODE_W, NODE_H, COL_GAP, ROW_GAP, PAD = 190, 54, 96, 14, 18
 
@@ -128,6 +134,10 @@ def _overview(report: dict, graph: dict | None) -> str:
         ]
     else:
         tiles.append(tile("Ownership", "-", "needs git history"))
+    rev = report["review"]
+    if rev["available"]:
+        t = rev["totals"]
+        tiles.append(tile(f"Changed in {rev['days']} days", n(t["lines"]), f"lines ({_delta(t['lines'], t['previous_lines'])} against the {rev['days']} days before) in {n(t['commits'])} commits"))
     if graph and graph["summary"]["modules"]:
         cycles = graph["cycles"]
         tiles.append(tile("Module cycles", str(len(cycles)), f"{sum(len(c['modules']) for c in cycles)} of {graph['summary']['modules']} modules are in one" if cycles else "no module depends on itself"))
@@ -182,6 +192,18 @@ def _attention(report: dict, graph: dict | None) -> str:
         )
     else:
         tangled = '<p class="empty">No import graph: no analyzer covers these languages.</p>'
+    rev = report["review"]
+    if rev["available"] and rev["areas"]:
+        rows = []
+        for r in rev["areas"][:4]:
+            outsiders = "" if r["outside_share"] is None else f"{r['outside_share']}% by outsiders, "
+            rows.append(f'<li><code class="p">{wb(r["path"])}</code><span class="sub">{n(r["lines"])} lines ({_delta(r["lines"], r["previous_lines"])}), {outsiders}{n(r["commits"])} commits</span></li>')
+        fast = items(rows, "No code changed in this window.")
+        if rev["unowned"]["lines"]:
+            fast += f'<p class="sub">{n(rev["unowned"]["lines"])} changed lines landed where nobody active maintains the code.</p>'
+        review_card = f'<div class="card"><h3>Changing fastest</h3>{fast}<p class="sub"><a href="#review">Review load</a></p></div>'
+    else:
+        review_card = ""
     return f"""<section id="attention">
 <h2>Where to look first</h2>
 <p class="lede">Each list is the top of a longer table further down. Treat them as questions to check, not verdicts.</p>
@@ -189,6 +211,7 @@ def _attention(report: dict, graph: dict | None) -> str:
   <div class="card"><h3>Probably unused</h3>{unused}<p class="sub"><a href="#cleanup">All {n(report['summary']['orphans']['files'])} candidates</a></p></div>
   <div class="card"><h3>Nobody active maintains</h3>{unowned}<p class="sub"><a href="#ownership">Ownership</a></p></div>
   <div class="card"><h3>Dependencies to untangle</h3>{tangled}<p class="sub"><a href="#modules">Module graph</a></p></div>
+  {review_card}
 </div>
 </section>"""
 
@@ -437,6 +460,90 @@ def _ownership_section(report: dict) -> str:
     return out + "\n</section>"
 
 
+def _review_section(report: dict) -> str:
+    rev = report["review"]
+    if not rev["available"]:
+        return ""
+    t, w, days = rev["totals"], rev["window"], rev["days"]
+    gone = report["settings"]["owner_inactive_days"]
+    facts = [
+        f"<b>{n(t['lines'])}</b> lines changed in code files ({_delta(t['lines'], t['previous_lines'])} against {n(t['previous_lines'])} before), in {_count(t['commits'], 'commit')} across {_count(t['areas'], 'area')} by {_count(t['authors'], 'person', 'people')}."
+    ]
+    if rev["unowned"]["lines"]:
+        facts.append(f"<b>{n(rev['unowned']['lines'])}</b> lines ({rev['unowned']['share']}%) landed in {_count(rev['unowned']['areas'], 'area')} that nobody active maintains: nobody who knows that code is around to look.")
+    if t["automated_lines"]:
+        facts.append(f"{n(t['automated_lines'])} lines came from bots or ignored authors.")
+    if t["other_lines"]:
+        facts.append(f"{n(t['other_lines'])} lines of configuration and docs are not counted.")
+    if t["bulk"]["commits"]:
+        facts.append(
+            f"{n(t['bulk']['commits'])} commit{'s' if t['bulk']['commits'] != 1 else ''} touching {n(t['bulk']['threshold'])} or more files ({n(t['bulk']['lines'])} lines) "
+            "are left out: a reformat or vendor drop is not reviewed line by line."
+        )
+    head = f"""<section id="review">
+<h2>Review load</h2>
+<p class="lede">The last {days} days ({e(w['from'])} to {e(w['to'])}) against the {days} before. Git records who changed code, not who reviewed it, so this is how much review the changes ask for, not how much happened.</p>
+<div class="card"><ul class="items">{''.join(f'<li>{f}</li>' for f in facts)}</ul></div>"""
+    if not rev["areas"]:
+        return head + '\n<div class="card"><p class="empty">No code changed in this window.</p></div>\n</section>'
+    top = max(r["lines"] for r in rev["areas"]) or 1
+    rows = []
+    for r in rev["areas"]:
+        bar = _stack(
+            [
+                ("r-owner", r["owner_lines"], f"by an owner {n(r['owner_lines'])} lines"),
+                ("r-outside", r["outside_lines"], f"by someone else {n(r['outside_lines'])} lines"),
+                ("r-auto", r["automated_lines"], f"bots and ignored authors {n(r['automated_lines'])} lines"),
+            ],
+            thin=True,
+        )
+        who = ", ".join(f"{c['name']} {c['share']:g}%" for c in r["contributors"])
+        outside = "-" if r["outside_share"] is None else f"{r['outside_share']}%"
+        rows.append(
+            f'<tr><td class="path">{wb(r["path"])}</td>'
+            f'<td class="num" data-v="{r["lines"]}">{n(r["lines"])}<div class="stackwrap" style="width:{max(4, round(100 * r["lines"] / top))}%">{bar}</div></td>'
+            f'{_num(r["previous_lines"] and round(100 * (r["lines"] - r["previous_lines"]) / r["previous_lines"]), _delta(r["lines"], r["previous_lines"]))}'
+            f'{_num(r["commits"])}{_num(r["authors"])}'
+            f'<td class="num" data-v="{-1 if r["outside_share"] is None else r["outside_share"]}">{outside}</td>'
+            f'<td class="wide">{e(who) or "-"}</td><td class="wide">{e(_owners(r["owners"], gone))}</td><td>{e(_STATE_TEXT[r["ownership"]])}</td></tr>'
+        )
+    legend = (
+        '<ul class="legend"><li><span class="dot r-owner"></span><b>By an owner</b> <span class="sub">the author is among the people who maintain the area</span></li>'
+        '<li><span class="dot r-outside"></span><b>By someone else</b> <span class="sub">an owner should see it</span></li>'
+        '<li><span class="dot r-auto"></span><b>Bots and ignored authors</b></li></ul>'
+    )
+    areas = _table(
+        "review-table",
+        [("Area", "text"), ("Changed lines", "num"), ("Against before", "num"), ("Commits", "num"), ("People", "num"), ("By others", "num"), ("Who changed it", "text"), ("Owners", "text"), ("State", "text")],
+        rows,
+        limit=15,
+        label="Changed lines by area",
+    )
+    out = head + f'\n<div class="card"><h3>Where the changes landed</h3><p class="sub">Areas are directories, split by size. Click a heading to sort.</p>{legend}{areas}</div>'
+    landing = []
+    for r in rev["reviewers"]:
+        state = "active" if r["active"] else f"silent for {r['idle_days']} days"
+        landing.append(f'<tr><td>{e(r["name"])}</td>{_num(r["inbound_lines"])}{_num(r["areas"])}<td>{state}</td></tr>')
+    biggest = [
+        f'<tr><td class="mono">{e(r["sha"])}</td><td>{e(r["date"])}</td><td>{e(r["author"])}</td>{_num(r["lines"])}{_num(r["files"])}<td class="path">{wb(r["area"])}</td><td class="wide">{e(r["subject"])}</td></tr>'
+        for r in rev["largest_changes"]
+    ]
+    out += '\n<div class="grid g2">'
+    if landing:
+        out += (
+            '<div class="card"><h3>Who the changes land on</h3><p class="sub">The people who maintain the areas that others changed, by lines changed by someone else. Git cannot see who reviewed.</p>'
+            + _table("landing-table", [("Person", "text"), ("Lines from others", "num"), ("Areas", "num"), ("State", "text")], landing, limit=8, label="Who the changes land on")
+            + "</div>"
+        )
+    if biggest:
+        out += (
+            '<div class="card"><h3>Largest changes</h3><p class="sub">The hardest to review: one commit, many lines.</p>'
+            + _table("biggest-table", [("Commit", "text"), ("Date", "text"), ("Author", "text"), ("Lines", "num"), ("Files", "num"), ("Mostly in", "text"), ("Subject", "text")], biggest, limit=8, label="Largest changes")
+            + "</div>"
+        )
+    return out + "</div>\n</section>"
+
+
 def _hotspots(report: dict) -> str:
     rows_in = report["hotspots"]
     if not rows_in:
@@ -498,6 +605,7 @@ def _notes(report: dict) -> str:
         ("Active window", f"{s['active_days']} days"),
         ("Dormant after", f"{s['dormant_days']} days"),
         ("Owner gone after", f"{s['owner_inactive_days']} days without a commit"),
+        ("Review window", f"{s['review_days']} days" if s["review_days"] else "off"),
     ]
     if an["unanalyzed_languages"]:
         facts.append(("Volume and activity only", ", ".join(f"{k} ({n(v['files'])})" for k, v in an["unanalyzed_languages"].items())))
@@ -523,7 +631,7 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
         "graph": {"modules": graph["modules"]} if has_graph else None,
         "explorer": explorer,
     }
-    nav = [("overview", "Overview"), ("attention", "Look first"), ("directories", "Directories"), ("modules", "Modules"), ("impact", "Impact"), ("ownership", "Ownership"), ("hotspots", "Hotspots"), ("cleanup", "Cleanup"), ("notes", "Notes")]
+    nav = [("overview", "Overview"), ("attention", "Look first"), ("directories", "Directories"), ("modules", "Modules"), ("impact", "Impact"), ("ownership", "Ownership"), ("review", "Review"), ("hotspots", "Hotspots"), ("cleanup", "Cleanup"), ("notes", "Notes")]
     body = "\n".join(
         part
         for part in (
@@ -533,6 +641,7 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
             _modules_section(report, graph if has_graph else None),
             _impact_section(explorer),
             _ownership_section(report),
+            _review_section(report),
             _hotspots(report),
             _cleanup(report),
             _notes(report),

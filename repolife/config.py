@@ -6,7 +6,7 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-_INT_KEYS = ("active_days", "dormant_days", "owner_inactive_days", "depth", "top")
+_INT_KEYS = ("active_days", "dormant_days", "owner_inactive_days", "review_days", "depth", "top")
 _LIST_KEYS = ("keep", "exclude", "entry", "ignore_authors")
 
 
@@ -19,6 +19,7 @@ class Config:
     active_days: int = 90  # touched within this many days => ACTIVE
     dormant_days: int = 365  # untouched for this long (and little used) => DORMANT
     owner_inactive_days: int = 180  # an author with no commit anywhere in the repository for this long no longer counts as an owner
+    review_days: int = 30  # review load: changes in this many days, against the same number before (0 turns it off)
     depth: int = 1  # directory depth for the per-directory rollup
     top: int = 15  # rows in "largest files" and "hotspots"
     keep: list[str] = field(default_factory=list)  # globs never reported as orphans (public API, plugins)

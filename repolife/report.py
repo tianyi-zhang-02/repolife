@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import datetime, timezone
 
-from . import __version__
+from . import __version__, review
 from .analyze import Analysis
 from .model import SCHEMA_VERSION, STATUSES
 from .ownership import LISTED_OWNERS, UNKNOWN, UNOWNED, bus_factor, owner_rows, rollup
@@ -162,6 +162,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
             "active_days": a.cfg.active_days,
             "dormant_days": a.cfg.dormant_days,
             "owner_inactive_days": a.cfg.owner_inactive_days,
+            "review_days": a.cfg.review_days,
             "ignore_authors": a.cfg.ignore_authors,
             "keep": a.cfg.keep,
             "exclude": a.cfg.exclude,
@@ -182,6 +183,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
         "languages": sorted(languages.values(), key=lambda row: -row["code"]),
         "directories": sorted(directories.values(), key=lambda row: -row["code"]),
         "ownership": _ownership_section(a, code_recs),
+        "review": review.section(a),
         "largest_files": [
             {"path": r.path, "language": r.language, "code": r.code, "status": r.status}
             for r in sorted(code_recs, key=lambda r: -r.code)[:top]

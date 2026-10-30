@@ -12,6 +12,7 @@ _LIGHT = """
   --accent: #2a78d6; --link: #1c5cab;
   --st-active: #2a78d6; --st-stable: #1baf7a; --st-dormant: #eda100; --st-orphan: #d03b3b;
   --edge: #a9a79f; --edge-hot: #2a78d6;
+  --r-owner: #6250d6; --r-outside: #eb6834; --r-auto: #898781;
 """
 
 _DARK = """
@@ -21,6 +22,7 @@ _DARK = """
   --accent: #3987e5; --link: #6da7ec;
   --st-active: #3987e5; --st-stable: #199e70; --st-dormant: #c98500; --st-orphan: #d03b3b;
   --edge: #4d4c48; --edge-hot: #6da7ec;
+  --r-owner: #9085e9; --r-outside: #d95926; --r-auto: #898781;
 """
 
 CSS = (
@@ -60,7 +62,8 @@ h3 { font-size: 15px; margin: 0 0 8px; font-weight: 650; }
 .card + .card { margin-top: 12px; }
 .grid > .card, .tiles > .card { margin-top: 0; }
 .grid { display: grid; gap: 12px; }
-.g3 { grid-template-columns: repeat(auto-fit, minmax(290px, 1fr)); }
+.g3 { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+.g2 { grid-template-columns: repeat(auto-fit, minmax(420px, 1fr)); }
 .tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-top: 12px; }
 .tile .label { color: var(--ink2); font-size: 13px; }
 .tile .value { font-size: 26px; font-weight: 600; line-height: 1.25; }
@@ -77,6 +80,8 @@ h3 { font-size: 15px; margin: 0 0 8px; font-weight: 650; }
 .legend b { font-weight: 600; }
 .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; background: var(--c); margin-right: 6px; vertical-align: baseline; }
 .bar1 { display: block; height: 8px; border-radius: 0 4px 4px 0; background: var(--accent); min-width: 2px; }
+.r-owner { --c: var(--r-owner); } .r-outside { --c: var(--r-outside); } .r-auto { --c: var(--r-auto); }
+.stackwrap { margin-top: 5px; margin-left: auto; }
 .s-active { --c: var(--st-active); } .s-stable { --c: var(--st-stable); } .s-dormant { --c: var(--st-dormant); } .s-orphan { --c: var(--st-orphan); }
 
 .items { margin: 0; padding: 0; list-style: none; }
@@ -144,6 +149,7 @@ footer { padding: 28px 0 40px; color: var(--ink2); font-size: 13px; }
 .caveats li { margin: 4px 0; }
 
 @media (max-width: 640px) {
+  .g2 { grid-template-columns: 1fr; }
   h1 { font-size: 24px; } .hero { font-size: 44px; }
   .tiles { grid-template-columns: repeat(2, 1fr); }
   .card { padding: 14px; }

@@ -23,6 +23,10 @@ CONFIG = """\
 # no longer counts as someone who maintains the code.
 # owner_inactive_days = 180
 
+# Review load: how much code changed in this many days, against the same number of days before.
+# 0 turns it off.
+# review_days = 30
+
 # Commit authors that never own code, matched against name or email, ignoring case.
 # Bots such as dependabot are ignored already. A .mailmap merges one person's addresses.
 # ignore_authors = ["release-script*", "*@ci.example.com"]
@@ -93,6 +97,22 @@ changing the code, not who is accountable, and git cannot tell who reviewed.
   and marks anyone who has gone silent.
 - Authors are matched by name; a `.mailmap` fixes merged or split people. Bots are ignored.
 
+## Review load
+
+`review` counts the lines that changed in code files over the last `review_days` days (30) against the days before,
+per area (a directory, split by size). It measures how much review the changes ask for, not who reviewed: git
+cannot see that.
+
+- `areas[]` has `lines`, `previous_lines`, `commits`, `authors`, `outside_share` (the share of the people's lines
+  written by someone who is not among the area's owners) and `ownership`. Read `outside_share` with `owners`:
+  where ownership is spread thin, most changes are by "outsiders".
+- `unowned` is the lines that landed where nobody active maintains the code. Raise it with a human; do not pick a
+  reviewer there.
+- `reviewers[]` are the people who maintain the areas others changed, by `inbound_lines`; `active: false` means
+  they have gone quiet. Use it to decide whom to ask or tell, not as an assignment.
+- `largest_changes[]` are the biggest single commits: where to start when review time is short. Commits touching
+  `totals.bulk.threshold` or more files are reported apart under `totals.bulk`.
+
 ## Statuses
 
 - ACTIVE: touched in the last `active_days` (default 90).
@@ -128,7 +148,8 @@ ACTIVE, STABLE, DORMANT or ORPHAN (nothing reaches them). Verify a candidate wit
 `repolife why <path>` and a repository-wide search before removing it; the scan is static and
 cannot see dynamic loading or external consumers. Files that must stay go under `keep` in
 `.repolife.toml`. Delete in small, separate changes and run the tests. To find who maintains a path,
-read the `ownership` section of the scan or run `repolife why <path>`. Before changing a widely used file,
+read the `ownership` section of the scan or run `repolife why <path>`. To see how much code changed lately and
+where, read `review`. Before changing a widely used file,
 run `repolife impact <path>`: it lists the files that import it, the tests that reach it and who maintains
 them. `repolife graph` shows how modules depend on each other and where the cycles are.
 """

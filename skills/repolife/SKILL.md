@@ -62,6 +62,22 @@ changing the code, not who is accountable, and git cannot tell who reviewed.
   and marks anyone who has gone silent.
 - Authors are matched by name; a `.mailmap` fixes merged or split people. Bots are ignored.
 
+## Review load
+
+`review` counts the lines that changed in code files over the last `review_days` days (30) against the days before,
+per area (a directory, split by size). It measures how much review the changes ask for, not who reviewed: git
+cannot see that.
+
+- `areas[]` has `lines`, `previous_lines`, `commits`, `authors`, `outside_share` (the share of the people's lines
+  written by someone who is not among the area's owners) and `ownership`. Read `outside_share` with `owners`:
+  where ownership is spread thin, most changes are by "outsiders".
+- `unowned` is the lines that landed where nobody active maintains the code. Raise it with a human; do not pick a
+  reviewer there.
+- `reviewers[]` are the people who maintain the areas others changed, by `inbound_lines`; `active: false` means
+  they have gone quiet. Use it to decide whom to ask or tell, not as an assignment.
+- `largest_changes[]` are the biggest single commits: where to start when review time is short. Commits touching
+  `totals.bulk.threshold` or more files are reported apart under `totals.bulk`.
+
 ## Statuses
 
 - ACTIVE: touched in the last `active_days` (default 90).
