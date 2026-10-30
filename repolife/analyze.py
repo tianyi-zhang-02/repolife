@@ -47,6 +47,7 @@ def _apply_activity(rec: FileRecord, act, now: float) -> None:
     rec.first_commit, rec.last_commit = _day(act.first), _day(act.last)
     rec.age_days = int((now - act.last) // 86400)
     rec.commits_active, rec.commits_year, rec.authors_year = act.commits_active, act.commits_year, act.authors_year
+    rec.fixes_90, rec.fixes_year = act.fixes_90, act.fixes_year
 
 
 def _apply_ownership(rec: FileRecord, own: Ownership) -> None:
@@ -105,7 +106,7 @@ def _judge(rec: FileRecord, g: graph.Graph, cfg: Config, now: float, have_git: b
         rec.status = "STABLE"
 
 
-def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[Analyzer] | None = None) -> Analysis:
+def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[Analyzer] | None = None, rev: str = "HEAD") -> Analysis:
     root = Path(root).resolve()
     now = time.time() if now is None else now
 
@@ -162,7 +163,7 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
                 scans[path] = textrefs.scan_text(texts[path], weak=mode == "weak")
 
     g = graph.build(results, analyzed, scans, cfg.keep, cfg.entry)
-    activity = gitlog.load(root, now, cfg.active_days, cfg.ignore_authors) if used_git else None
+    activity = gitlog.load(root, now, cfg.active_days, cfg.ignore_authors, rev) if used_git else None
 
     changes = gitlog.changes(root, now, cfg.review_days, cfg.ignore_authors) if used_git and cfg.review_days > 0 else None
 

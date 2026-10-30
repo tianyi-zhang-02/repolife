@@ -196,10 +196,12 @@ def _members(a: Analysis, include_tests: bool) -> list[str]:
     return sorted(p for p, r in a.records.items() if r.kind == "code" and r.analyzer and (include_tests or not r.is_test))
 
 
-def build_graph(a: Analysis, depth: int | None = None, include_tests: bool = False, level: str = "module") -> dict:
+def build_graph(a: Analysis, depth: int | None = None, include_tests: bool = False, level: str = "module", assignment: Mapping[str, str] | None = None) -> dict:
+    """`assignment` fixes the module of every file in advance, so two states of one repository can be compared module
+    by module instead of each choosing its own split."""
     paths = _members(a, include_tests)
     member = set(paths)
-    module_of = assign(paths, depth)
+    module_of = {p: assignment[p] for p in paths} if assignment is not None else assign(paths, depth)
     imports = sorted((s, t) for s in member for t in _imported(a, s) if t in member)
 
     if level == "file":

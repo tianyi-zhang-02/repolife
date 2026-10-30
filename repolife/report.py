@@ -189,7 +189,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
             for r in sorted(code_recs, key=lambda r: -r.code)[:top]
         ],
         "hotspots": [
-            {"path": r.path, "commits_year": r.commits_year, "authors_year": r.authors_year, "code": r.code, "last_commit": r.last_commit, "status": r.status, "owner": r.owner}
+            {"path": r.path, "commits_year": r.commits_year, "authors_year": r.authors_year, "fixes_year": r.fixes_year, "code": r.code, "last_commit": r.last_commit, "status": r.status, "owner": r.owner}
             for r in sorted((r for r in code_recs if r.commits_year), key=lambda r: (-r.commits_year, -r.code))[:top]
         ],
         "cleanup": {

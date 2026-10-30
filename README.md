@@ -6,8 +6,9 @@ repolife reads a repository and reports four things in one pass: how much code t
 how recently each file changed, whether anything still reaches it, and who has been maintaining it.
 It is built for coding agents (stable JSON, an agent skill, a `why` command to verify every claim)
 and is just as readable by a person. When a codebase outgrows what anyone can review, it answers
-where the volume is, what is unused, and which corners nobody looks after. Two more commands read the same
-import graph: `graph` shows how the modules depend on each other, and `impact` shows what a change can reach.
+where the volume is, what is unused, and which corners nobody looks after. Three more commands read the same
+import graph and history: `graph` shows how the modules depend on each other, `impact` what a change can reach, and
+`triage` which files of a change deserve a human first.
 
 - **Zero dependencies.** Pure Python 3.11+ standard library.
 - **Mounts into any repo** in one command, existing or brand new: `repolife init`.
@@ -24,6 +25,12 @@ import graph: `graph` shows how the modules depend on each other, and `impact` s
 - **Shows the structure.** `repolife graph` rolls imports up into modules, finds the cycles and the few
   dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests to run and who
   maintains the affected code. Static imports only, no model in the loop.
+- **Triages a change.** `repolife triage --since main` ranks the files of a branch, or of uncommitted work, by recent
+  activity, and shows what outside the change imports them, which tests reach them and who is able to look. Its order
+  was backtested, and what did not help was left out of the order.
+- **Checks what a change did to the structure.** `repolife check --since main` compares a branch with its base:
+  files the change left unreachable, modules now in a cycle, deleted files still imported, and changed code nobody
+  active maintains, with an exit code for CI.
 - **Honest about what it cannot see.** Languages without an analyzer get volume and activity,
   never a guessed verdict. Every orphan carries a confidence and the reasons it might still be wanted.
 - **Never edits code.**
@@ -38,9 +45,10 @@ repolife scan . --format html --out report.html   # one page to open or share
 repolife why path/to/file.py    # the evidence behind one verdict
 repolife graph .                # how modules depend on each other, and the cycles
 repolife impact path/to/file.py # what a change can reach, the tests to run, who to tell
+repolife triage --since main    # the files of a change to look at first, and who can look
 ```
 
-No install at all: build a single 260 KB file and drop it into any repository.
+No install at all: build a single 300 KB file and drop it into any repository.
 
 ```bash
 mkdir build && cp -r repolife build/       # from a checkout of this repository
@@ -282,6 +290,120 @@ Tests that reach it, nearest first: `tests/test_engine.py`
 without looping. With git history it also lists who maintains the affected code, which is who to tell or
 ask for a review. `--hops 1` keeps only direct importers. A package `__init__` is affected by any import
 beneath it, because Python runs it.
+
+## Triage a change
+
+```bash
+repolife triage --since main                 # a branch, judged from where it parted from main, plus uncommitted work
+repolife triage                              # only uncommitted work
+repolife triage --since main --format json   # for an agent
+```
+
+Given a change, which of its files should a human look at first, what outside the change can it ripple into, and who
+is able to look? The answer is a ranked list of the changed code files, each with why it is there, what imports it, and
+who maintains it, followed by the code outside the change that imports the changed files (one and two steps away),
+the tests that reach them, and the people who maintain them other than the authors.
+
+```text
+$ repolife triage --since main
+# Change triage: demo
+
+`main` (base 8f9c528cc) to HEAD fc97f1a93. 4 code files changed, **21** lines, in 2 areas; 2 other files (2 lines of config, docs and the like) not ranked.
+
+- **1** file was fixed or reverted in the last 90 days
+- **1** file has no active owner: nobody who maintains the code has committed lately
+- **1** file is maintained by nobody but the author
+- code outside the change that imports it: **1 file** directly, 0 files through one more step
+- **1** test file reaches it
+
+Look at these first:
+
+| # | File | Why | This change | Owners | Imported by | Flags |
+|---:|---|---|---|---|---:|---|
+| 1 | `core/a.py` | 3 commits in 90 days, 2 of them fixes or reverts | +4 -0 | Alice Adams 100% | 2 | author is not among the owners |
+| 2 | `util/c.py` | quiet since 2026-01-03 | +8 -0 | Bob Brown 100% (silent 300d) | 1 | no active owner; author is not among the owners |
+| 3 | `core/d.py` | new file | +6 -0 | - | 0 | new file; orphan: nothing reaches it |
+| 4 | `core/b.py` | quiet since 2026-04-13 | +2 -1 | Alice Adams 100% | 1 | author is not among the owners |
+
+Who can look, other than the authors: Alice Adams (2 files). Git cannot see who reviewed; these are the people who maintain the changed files.
+
+Only the author maintains: `util/c.py`
+
+Not in the change, but importing it (by area):
+
+| Area | Directly | One more step |
+|---|---:|---:|
+| `.` | 1 | 0 |
+
+Tests that reach it, nearest first: `tests/test_a.py`
+```
+
+**How the order is decided.** Files are ordered by how many commits touched them in the last 90 days, then by how much
+this change touches. We tested that rather than assuming it: on one large repository (nemo-rl, eleven monthly
+snapshots, no information from after each snapshot), the files a change touched were ordered this way and compared with
+which of them needed a fix over the following 30 days. The order scored an AUC of about 0.72, against 0.64 for
+"largest diff first". Three things we expected to help did not, so they are shown but do not move a file: knowing which
+of those commits were fixes or reverts (`fixes_90`), how many files import it, and who owns it. The first two describe
+trouble that already happened and what a mistake could reach; ownership describes who can catch it, which a
+"will it need a fix" score does not measure. One repository and eleven snapshots is a hint, not a proof. The backtest scripts are not
+in this repository yet, and the same check on other repositories has not been done.
+
+History is read up to the base of the change, so the change's own commits count neither as activity nor as making its
+author an owner, and a file the change adds has no history and sorts by its size. *Who can look* lists the people
+who maintain the changed files, excluding the authors (the commits of the change, or whoever `git config user.name` is
+when the work is uncommitted); git cannot see who reviewed. Dependents are static imports only: importing `a.b.c`
+does not make a file depend on the package `a`, and dynamic loading and consumers outside the repository are invisible.
+
+## Check a change's structure
+
+```bash
+repolife check --since main                  # a branch, judged from where it parted from main, plus uncommitted work
+repolife check                               # only uncommitted work
+repolife check --since main --fail-on block  # exit 1 when something is certain to break
+```
+
+`scan` describes a repository as it is; `check` says what a change did to it. It reads the base of the change straight
+from git objects into a scratch directory (the repository is not touched), analyses it and the working tree with the
+same settings, and compares them. Triage says which files to look at first; this says what the change did to the
+structure. They answer different questions and work together.
+
+| Finding | Severity | What it means |
+|---|---|---|
+| `dangling-import` | block | a file the change deleted or moved is still imported by a file the change did not touch |
+| `new-cycle`, `cycle-grew` | warn | modules that were not in a loop now are, or a cycle absorbed more modules; the new dependency that closed it is named |
+| `new-orphan` | warn | a new file nothing reaches, or a file the change cut the last link to (`stranded`, with what used to reach it); under `scripts/`, `examples/` and the like it is only a note, since those are run by hand |
+| `no-active-owner` | warn | changed code nobody active maintains. History is read up to the base, so the author's own commits do not make them the owner |
+| `new-dependency`, `orphan-resolved`, `cycle-resolved` | info | the other differences, the good ones too |
+
+```text
+$ repolife check --since main
+# Change check: demo-check
+
+`main` (9a0025443) to d6d893879: 4 files changed, 4 of them code (2 added, 1 modified, 1 deleted), **11** lines.
+
+**1 block, 3 warn, 1 info.**
+
+- **block**: `util/money.py` was deleted but is still imported
+  Untouched by this change, still importing it: `billing/invoices.py`
+  Do: Restore the file, or update every importer in the same change.
+- **warn**: Modules `billing`, `util` now depend on each other
+  Because of the new dependency `util` → `billing`, 1 import (for example `util/tax.py` imports `billing/invoices.py`).
+- **warn**: 2 new files that nothing reaches
+  Files: `billing/helpers.py`, `util/tax.py`
+- **warn**: 1 changed file nobody active maintains
+  Files: `legacy/rates.py`
+  Do: Have a human who knows the code look before merging, or assign an owner. A person has to decide this.
+```
+
+`--fail-on block` exits 1 for `dangling-import` only; `--fail-on warn` also for the warnings; the default never fails.
+`--format json` gives the same findings with their evidence (`orphans`, `cycles`, `dependencies`, `dangling_imports`,
+`unowned`, `changed_files`; `kind` is `change-check`) for an agent to act on.
+
+Only what static imports show is compared, so a clean result is not proof that nothing else depends on the change, and
+a `block` is certain only for importers the change left untouched. Both sides are cut into modules the same way, so a
+file added or removed cannot move a boundary and create a dependency that is not there. Renames are not followed: a
+moved file is a deletion and an addition. Files the analysis does not read (symlinks, submodules, anything above the
+size limit, anything excluded) are not part of either side.
 
 ## The HTML report
 

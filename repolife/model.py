@@ -36,6 +36,8 @@ class FileRecord:
     commits_active: int = 0
     commits_year: int = 0
     authors_year: int = 0
+    fixes_90: int = 0  # fix or revert commits touching the file in the last 90 days
+    fixes_year: int = 0  # ... and in the last 365 days
 
     # Ownership (see ownership.py). Observed from git, declared in CODEOWNERS.
     owner: str | None = None  # the person with the largest share of recent maintenance

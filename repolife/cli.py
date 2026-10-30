@@ -1,4 +1,4 @@
-"""Command line entry point: `repolife scan | why | graph | impact | init`."""
+"""Command line entry point: `repolife scan | why | graph | impact | triage | check | init`."""
 
 from __future__ import annotations
 
@@ -7,11 +7,12 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, config, graphview, htmlreport, modules
+from . import __version__, config, graphview, htmlreport, modules, since, sinceview
 from .analyze import analyze
 from .explain import TargetError, explain
 from .render import markdown
 from .report import build_report
+from .triage import TriageError, compute as triage_compute, markdown as triage_markdown
 
 # Not on PyPI yet: a bare `repolife` would install whatever package owns that name there.
 DEFAULT_INSTALL_SPEC = "git+https://github.com/tianyi-zhang-02/repolife"
@@ -116,6 +117,29 @@ def _cmd_graph(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_triage(args: argparse.Namespace) -> int:
+    root = _root(args.repo)
+    cfg = _config_for(root, args)
+    try:
+        result = triage_compute(root, cfg, args.since)
+    except TriageError as exc:
+        print(f"repolife: {exc}", file=sys.stderr)
+        return 2
+    _emit(json.dumps(result, indent=2) + "\n" if args.format == "json" else triage_markdown(result, args.limit, cfg.active_days), args.out)
+    return 0
+
+
+def _cmd_check(args: argparse.Namespace) -> int:
+    root = _root(args.repo)
+    try:
+        result = since.check(root, _config_for(root, args), args.since)
+    except since.CheckError as exc:
+        print(f"repolife: {exc}", file=sys.stderr)
+        return 2
+    _emit(json.dumps(result, indent=2) + "\n" if args.format == "json" else sinceview.markdown(result, args.limit), args.out)
+    return 1 if since.failing(result, args.fail_on) else 0
+
+
 def _cmd_impact(args: argparse.Namespace) -> int:
     root = _root(args.repo)
     analysis = analyze(root, _config_for(root, args))
@@ -183,6 +207,25 @@ def build_parser() -> argparse.ArgumentParser:
     impact.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
     _add_analysis_options(impact)
     impact.set_defaults(func=_cmd_impact)
+
+    triage = sub.add_parser("triage", help="which files of a change deserve a human first, what it can ripple into, who can look")
+    triage.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
+    triage.add_argument("--repo", default=".", help="repository root (default: .)")
+    triage.add_argument("--format", choices=("md", "json"), default="md")
+    triage.add_argument("--limit", type=int, default=20, metavar="N", help="md: files listed (default 20)")
+    triage.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
+    _add_analysis_options(triage)
+    triage.set_defaults(func=_cmd_triage)
+
+    check = sub.add_parser("check", help="what a change did to the structure: new orphans and cycles, imports of deleted files, changed code nobody maintains")
+    check.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
+    check.add_argument("--repo", default=".", help="repository root (default: .)")
+    check.add_argument("--format", choices=("md", "json"), default="md")
+    check.add_argument("--limit", type=int, default=20, metavar="N", help="md: rows per table (default 20)")
+    check.add_argument("--fail-on", choices=("never", "warn", "block"), default="never", help="exit 1 when a finding is at least this serious: block = deleted files still imported, warn = also new orphans, cycles and unowned code (default: never)")
+    check.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
+    _add_analysis_options(check)
+    check.set_defaults(func=_cmd_check)
 
     init = sub.add_parser("init", help="mount repolife into a repository: config, agent skill, AGENTS.md block, optional CI")
     init.add_argument("path", nargs="?", default=".", help="repository root (default: .)")

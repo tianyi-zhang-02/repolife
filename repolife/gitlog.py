@@ -13,6 +13,10 @@ from pathlib import Path
 HALF_LIFE_DAYS = 365  # when crediting ownership, a commit loses half its weight per year
 BULK_FILES = 300  # a commit touching this many files (mass reformat, vendor drop, first import) says little about who maintains each one
 _BOT = re.compile(r"\[bot\]|^(?:dependabot|renovate|github-actions|pre-commit-ci)\b", re.I)
+# A commit that repairs something: `fix: x`, `fix(scope): x`, `Fix typo`, `Fixes #3`, `bugfix`, `hotfix`, `Revert "x"`.
+# Judged from the subject alone, so a repository that writes no such subjects simply shows no fix history.
+FIX_SUBJECT = re.compile(r"^(?:fix(?:es|ed)?|bug-?fix|hotfix|revert)\b", re.I)
+FIX_WINDOW_DAYS = 90
 
 
 @dataclass
@@ -22,6 +26,8 @@ class FileActivity:
     commits_active: int  # commits inside the active window
     commits_year: int  # commits in the last 365 days
     authors_year: int  # distinct authors in the last 365 days
+    fixes_90: int = 0  # fix or revert commits in the last 90 days (see FIX_SUBJECT)
+    fixes_year: int = 0  # fix or revert commits in the last 365 days
 
 
 @dataclass
@@ -77,9 +83,9 @@ def is_ignored(name: str, email: str, patterns: Sequence[str]) -> bool:
     return any(fnmatch.fnmatchcase(v.lower(), p.lower()) for p in patterns for v in (name, email))
 
 
-def _commits(lines) -> Iterator[tuple[int, str, str, list[str]]]:
-    """(epoch, author name, author email, files) for each commit in a `git log --name-only` stream."""
-    head: tuple[int, str, str] | None = None
+def _commits(lines) -> Iterator[tuple[int, str, str, str, list[str]]]:
+    """(epoch, author name, author email, subject, files) for each commit in a `git log --name-only` stream."""
+    head: tuple[int, str, str, str] | None = None
     files: list[str] = []
     for line in lines:
         line = line.rstrip("\n")
@@ -87,11 +93,12 @@ def _commits(lines) -> Iterator[tuple[int, str, str, list[str]]]:
             if head:
                 yield (*head, files)
             stamp, _, rest = line[1:].partition("\t")
-            name, _, email = rest.partition("\t")
+            name, _, rest = rest.partition("\t")
+            email, _, subject = rest.partition("\t")
             try:
-                head = (int(stamp), name, email)
+                head = (int(stamp), name, email, subject)
             except ValueError:
-                head = (0, name, email)
+                head = (0, name, email, subject)
             files = []
         elif line:
             files.append(line)
@@ -99,8 +106,9 @@ def _commits(lines) -> Iterator[tuple[int, str, str, list[str]]]:
         yield (*head, files)
 
 
-def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str] = ()) -> Activity | None:
-    """Return None when `root` is not a git work tree or has no commits.
+def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str] = (), rev: str = "HEAD") -> Activity | None:
+    """Return None when `root` is not a git work tree or has no commits. History is read up to `rev`: asking for
+    the base of a change gives the picture before it, in which its own author owns nothing yet.
 
     Paths are relative to `root` (`--relative`), so a sub-directory of a larger
     repository is analysed on its own history. Merge commits list no files and
@@ -109,7 +117,7 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
     """
     cmd = [
         "git", "-c", "core.quotepath=false", "-C", str(root), "log",
-        "--relative", "--no-renames", "--name-only", "--format=%x1e%at%x09%aN%x09%aE",
+        "--relative", "--no-renames", "--name-only", "--format=%x1e%at%x09%aN%x09%aE%x09%s", rev, "--",
     ]  # fmt: skip
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
@@ -118,15 +126,17 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
 
     active_cut = now - active_days * 86400
     year_cut = now - 365 * 86400
-    stats: dict[str, list] = {}  # path -> [first, last, active, year, {authors}]
+    fix_cut = now - FIX_WINDOW_DAYS * 86400
+    stats: dict[str, list] = {}  # path -> [first, last, active, year, {authors}, fixes in the window, fixes in the year]
     authors: dict[str, Author] = {}
     credit: dict[str, dict[str, float]] = {}
     bulk: dict[str, dict[str, float]] = {}  # credit from bulk commits, used only for files nothing else touched
     commits = 0
     assert proc.stdout is not None
     with proc:  # closes the pipe and reaps the process
-        for when, who, email, files in _commits(proc.stdout):
+        for when, who, email, subject, files in _commits(proc.stdout):
             commits += 1
+            repair = bool(FIX_SUBJECT.match(subject))
             person = None if is_ignored(who, email, ignore_authors) else identity(who, email)
             weight = 0.5 ** (max(0.0, now - when) / (HALF_LIFE_DAYS * 86400))
             if person:
@@ -140,7 +150,7 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
             for path in files:
                 entry = stats.get(path)
                 if entry is None:
-                    entry = stats[path] = [when, when, 0, 0, set()]
+                    entry = stats[path] = [when, when, 0, 0, set(), 0, 0]
                 entry[0] = min(entry[0], when)
                 entry[1] = max(entry[1], when)
                 if when >= active_cut:
@@ -148,6 +158,10 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
                 if when >= year_cut:
                     entry[3] += 1
                     entry[4].add(who)
+                    if repair:
+                        entry[6] += 1
+                        if when >= fix_cut:
+                            entry[5] += 1
                 if person:
                     slot = target.setdefault(path, {})
                     slot[person] = slot.get(person, 0.0) + weight
@@ -157,8 +171,8 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
         credit.setdefault(path, slot)
 
     return Activity(
-        files={p: FileActivity(s[0], s[1], s[2], s[3], len(s[4])) for p, s in stats.items()},
-        head=_git_line(root, "rev-parse", "--short", "HEAD"),
+        files={p: FileActivity(s[0], s[1], s[2], s[3], len(s[4]), s[5], s[6]) for p, s in stats.items()},
+        head=_git_line(root, "rev-parse", "--short", rev),
         shallow=_git_line(root, "rev-parse", "--is-shallow-repository") == "true",
         commits=commits,
         authors=authors,

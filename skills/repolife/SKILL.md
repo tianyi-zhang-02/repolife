@@ -44,6 +44,34 @@ it directly or through others (`by_distance` says how far; `--hops 1` keeps only
 Edges are static imports. Importing `a.b.c` does not make a file depend on the package `a`; names in strings,
 dynamic imports and registries are not edges, so a missing edge is not proof that nothing depends on a file.
 
+## Triage a change
+
+```bash
+repolife triage --since <base> --format json     # a branch against its base; without --since, uncommitted work
+```
+
+Run it before you open a change and before you review one. `files` is the changed code, most active first: files
+that were committed to most in the last 90 days, then by lines changed. Fix and revert history (`fixes_90`),
+`dependents`, `owners` and `flags` are context shown beside the order, not part of it. `ripple` is code outside the
+change that imports the changed files, `tests.nearest` are the tests to run, `reviewers` are the people who maintain the
+files other than the authors, and `nobody_else_can_look` lists files only the author maintains. A flag
+`no active owner` means nobody who maintains the file has committed lately: ask a human to assign someone. History is
+read up to the base, so the change's own commits do not count. It is a prompt about where to look, not a verdict.
+
+## Check a change's structure
+
+```bash
+repolife check --since <base> --format json --fail-on block     # without --since, uncommitted work
+```
+
+Run it when a task is done and before the change is opened. It compares the base of the change with the working
+tree and lists what the change did to the structure, `findings` ordered by `severity`. `block` is certain breakage:
+`dangling-import` means a file the change deleted is still imported by files it did not touch, so restore it or
+update the importers. `warn` needs a decision: `new-cycle` and `cycle-grew` name the new dependency that closed the
+loop, `new-orphan` is a new file nothing reaches (`how: stranded` is a file the change cut the last link to, with
+`was_reached_from`), and `no-active-owner` is changed code nobody active maintains (`needs_human`: ask a person, do not
+pick a reviewer from its last maintainers). `info` is the rest. Static imports only: a clean result is not proof.
+
 ## Ownership
 
 `ownership` is inferred from git: each commit credits its author with the files it touched, recent
