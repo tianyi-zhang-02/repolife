@@ -17,6 +17,8 @@ import graph: `graph` shows how the modules depend on each other, and `impact` s
   `import_module(f"pkg.{name}")` loops, tsconfig `paths`, `package.json` entries, Next.js pages, `import.meta.glob`.
 - **Knows who looks after what.** Owners come from git history (and are compared with `CODEOWNERS`),
   and code whose maintainers have all gone quiet is listed as needing an owner.
+- **One page to open.** `repolife scan --format html` writes a single self-contained file (no network, works
+  offline, light and dark): the overview, the module graph, an impact explorer, owners and cleanup candidates.
 - **Shows the structure.** `repolife graph` rolls imports up into modules, finds the cycles and the few
   dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests to run and who
   maintains the affected code. Static imports only, no model in the loop.
@@ -30,12 +32,13 @@ import graph: `graph` shows how the modules depend on each other, and `impact` s
 pip install git+https://github.com/tianyi-zhang-02/repolife   # or run once: uvx --from git+https://github.com/tianyi-zhang-02/repolife repolife scan .
 repolife scan .                 # markdown report
 repolife scan . --format json   # machine-readable
+repolife scan . --format html --out report.html   # one page to open or share
 repolife why path/to/file.py    # the evidence behind one verdict
 repolife graph .                # how modules depend on each other, and the cycles
 repolife impact path/to/file.py # what a change can reach, the tests to run, who to tell
 ```
 
-No install at all: build a single 170 KB file and drop it into any repository.
+No install at all: build a single 230 KB file and drop it into any repository.
 
 ```bash
 mkdir build && cp -r repolife build/       # from a checkout of this repository
@@ -231,6 +234,31 @@ without looping. With git history it also lists who maintains the affected code,
 ask for a review. `--hops 1` keeps only direct importers. A package `__init__` is affected by any import
 beneath it, because Python runs it.
 
+## The HTML report
+
+```bash
+repolife scan . --format html --out report.html
+```
+
+One file, about 250 KB for a repository of two thousand files: styles, script and data are inside it, nothing is
+fetched, and it is rendered on the server, so it reads without scripts and prints. The script only adds sorting,
+filtering, highlighting in the module graph and the impact explorer.
+
+| Section | What it is for |
+|---|---|
+| Overview | lines of code, how much is unreachable or recently changed, people and bus factor, module cycles, and the code split by status |
+| Where to look first | the top of three longer tables: probably unused, nobody active maintains, dependencies to untangle |
+| Directories | size, status mix and owners per directory; click a heading to sort |
+| Modules | the dependency graph (users on the left, what they build on to the right, cuts that break a cycle in red; click a module to highlight what it uses and what uses it), the cycles with their cut lists, and every module in a table |
+| Impact | type any file or directory: the code that imports it directly or through others, the tests that reach it, and who owns the affected files |
+| Ownership, hotspots, cleanup | the same tables as the Markdown report, with filters on the long ones |
+
+The impact explorer walks the import graph embedded in the page, and the tests check that it gives the same
+numbers as `repolife impact` for every file and directory of this repository. Two differences: it names the top
+owner of each affected file rather than a rolled-up share, and it is left out (with a note) past 20,000 analysed
+files, where `repolife impact` still works. Status colours are four hues chosen to stay apart under common colour
+blindness, and every one is repeated in text. Names are escaped everywhere, and emails never reach the page.
+
 ## Configuration
 
 `.repolife.toml` (or `[tool.repolife]` in `pyproject.toml`); every flag has a CLI equivalent.
@@ -284,6 +312,8 @@ Two reference implementations, written against the same interface: `repolife/ana
   inside a template literal's `${}`, and scripts in extensionless hook files such as `.husky/pre-commit`.
 - Git activity needs history: a shallow clone truncates it, and a repository with no commits yet
   reports statuses as `UNKNOWN`. Renames are not followed.
+- The HTML explorer's script is exercised against the Python implementation, but the page's sorting and filtering
+  are checked by hand in a browser, not by an automated test.
 - The module graph is static imports between Python and JavaScript/TypeScript files. A package that re-exports
   everything (a busy `__init__.py` or `index.ts`) makes the modules importing through it look more tangled than
   their real call graph, and registries, dependency injection and dynamic loading leave no edge, so a missing

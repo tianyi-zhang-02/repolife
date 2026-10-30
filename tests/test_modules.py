@@ -380,7 +380,7 @@ class ViewTest(unittest.TestCase):
             ({"from": f"m{a}", "to": f"m{b}", "imports": rng.randint(1, 12), "files": 1, "examples": [], "cycle": None, "cut": False} for a in range(40) for b in range(40) if a != b and rng.random() < 0.3),
             key=lambda e: -e["imports"],
         )
-        modules_, edges, floor = graphview._drawn(g, None)
+        modules_, edges, floor = graphview.drawn(g, None)
         self.assertLessEqual(len(edges), graphview.MAX_DRAWN)
         self.assertGreater(len(g["edges"]), graphview.MAX_DRAWN)
         dropped = [e["imports"] for e in g["edges"] if e not in edges]
@@ -388,7 +388,7 @@ class ViewTest(unittest.TestCase):
         self.assertTrue(all(e["imports"] >= floor for e in edges))
         self.assertEqual({m["id"] for m in modules_}, {e["from"] for e in edges} | {e["to"] for e in edges})
         self.assertIn(f"at least {floor} imports", graphview.mermaid(g))
-        self.assertEqual(len(graphview._drawn(g, 1)[1]), len(g["edges"]))
+        self.assertEqual(len(graphview.drawn(g, 1)[1]), len(g["edges"]))
 
     def test_markdown_lists_cycles_modules_and_dependencies(self):
         text = graphview.markdown(sample_graph())

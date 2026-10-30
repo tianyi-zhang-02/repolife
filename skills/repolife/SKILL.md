@@ -16,7 +16,8 @@ repolife scan . --format json --out .repolife/report.json
 ```
 
 If `repolife` is not on PATH, use `python3 -m repolife ...` or `uvx --from git+https://github.com/tianyi-zhang-02/repolife repolife ...`.
-Add `--format md` (the default) for a report meant to be read by a person.
+Add `--format md` (the default) for a report meant to be read by a person, or `--format html --out report.html` for one
+self-contained page with the module graph and an impact explorer to open or share.
 
 Read in this order: `summary` (sizes, status counts, orphan share), `cleanup.orphan_files`,
 `cleanup.test_only_files`, then `hotspots` and `directories` for where change is concentrated,

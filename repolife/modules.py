@@ -399,3 +399,41 @@ def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPA
         out["owners"], out["contributors"] = owner_rows(area.owners, IMPACT_OWNERS), _contributors(area)
         out["inactive_days"] = a.ownership.inactive_days
     return out
+
+
+# --- data for the explorer in the HTML report -------------------------------------------------------------
+
+EXPLORER_MAX_FILES = 20000  # past this the page would be too heavy to carry the import graph
+
+
+def explorer(a: Analysis) -> dict | None:
+    """Everything a browser needs to answer `impact` for any file or directory: the analysed code files, the
+    modules the non-test ones fall into, who owns each, and every import (flagged when no statement makes it).
+    None when there is nothing to explore or too much of it."""
+    paths = sorted(p for p, r in a.records.items() if r.kind == "code" and r.analyzer)
+    if not paths or len(paths) > EXPLORER_MAX_FILES:
+        return None
+    g = a.graph
+    pool = [p for p in paths if not a.records[p].is_test]
+    module_of = assign(pool)
+    keys = sorted(set(module_of.values()))
+    people: dict[str, int] = {}
+    people_rows: list[dict] = []
+    files = []
+    for p in paths:
+        r = a.records[p]
+        who = -1
+        if r.owner:
+            if r.owner not in people:
+                people[r.owner] = len(people_rows)
+                people_rows.append({"name": r.owner, "idle_days": r.owner_idle_days})
+            who = people[r.owner]
+        files.append([p, keys.index(module_of[p]) if p in module_of else -1, r.code, int(r.is_test), who])
+    index = {p: i for i, p in enumerate(paths)}
+    edges = sorted(
+        (index[s], index[t], int(t in g.indirect.get(s, ())))
+        for s in paths
+        for t in g.edges.get(s, ())
+        if t in index and t != s
+    )
+    return {"modules": keys, "files": files, "edges": [list(e) for e in edges], "people": people_rows, "inactive_days": a.cfg.owner_inactive_days}

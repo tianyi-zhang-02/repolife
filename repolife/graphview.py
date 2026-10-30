@@ -81,7 +81,7 @@ def _state(m: dict) -> str:
     return _STATE_TEXT[m["ownership"]] if m["code"] else "no code"
 
 
-def _drawn(graph: dict, min_imports: int | None) -> tuple[list[dict], list[dict], int]:
+def drawn(graph: dict, min_imports: int | None) -> tuple[list[dict], list[dict], int]:
     """(modules, edges, threshold) to draw. A picture with hundreds of arrows says nothing, so unless a
     threshold is given, the lightest dependencies are left out until at most MAX_DRAWN remain."""
     edges = graph["edges"]
@@ -101,7 +101,7 @@ def _label(m: dict) -> str:
 
 
 def mermaid(graph: dict, min_imports: int | None = None) -> str:
-    modules, edges, floor = _drawn(graph, min_imports)
+    modules, edges, floor = drawn(graph, min_imports)
     ids = {m["id"]: f"n{i}" for i, m in enumerate(modules)}
     out = ["flowchart LR", f"  %% {len(edges)} of {len(graph['edges'])} dependencies drawn (at least {_many(floor, 'import')}); red ones are the cuts that break a cycle"]
     for m in modules:
@@ -124,7 +124,7 @@ def _q(text: str) -> str:
 
 
 def dot(graph: dict, min_imports: int | None = None) -> str:
-    modules, edges, floor = _drawn(graph, min_imports)
+    modules, edges, floor = drawn(graph, min_imports)
     out = [
         "digraph repolife {",
         f"  // {len(edges)} of {len(graph['edges'])} dependencies drawn (at least {_many(floor, 'import')}); red ones are the cuts that break a cycle",

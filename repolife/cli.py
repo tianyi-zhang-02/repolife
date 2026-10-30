@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, config, graphview, modules
+from . import __version__, config, graphview, htmlreport, modules
 from .analyze import analyze
 from .explain import TargetError, explain
 from .render import markdown
@@ -69,7 +69,13 @@ def _cmd_scan(args: argparse.Namespace) -> int:
     root = _root(args.path)
     analysis = analyze(root, _config_for(root, args))
     report = build_report(analysis, full=args.full)
-    _emit(json.dumps(report, indent=2) + "\n" if args.format == "json" else markdown(report, args.limit), args.out)
+    if args.format == "json":
+        text = json.dumps(report, indent=2) + "\n"
+    elif args.format == "html":
+        text = htmlreport.build_html(analysis, report)
+    else:
+        text = markdown(report, args.limit)
+    _emit(text, args.out)
     return 0
 
 
@@ -135,7 +141,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     scan = sub.add_parser("scan", help="analyse a repository and print the report")
     scan.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
-    scan.add_argument("--format", choices=("md", "json"), default="md")
+    scan.add_argument("--format", choices=("md", "json", "html"), default="md", help="html: one self-contained page with the module graph and an impact explorer")
     scan.add_argument("--out", metavar="FILE", help="write the report to FILE instead of stdout")
     scan.add_argument("--full", action="store_true", help="json: include the per-file table")
     scan.add_argument("--limit", type=int, default=40, metavar="N", help="md: rows per candidate table (default 40)")
