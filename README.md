@@ -2,7 +2,14 @@
 
 **Which parts of a repository are alive?**
 
-repolife reads a repository and reports four things in one pass: how much code there is,
+repolife is a triage layer for repositories where agents write most of the code. With nothing installed,
+offline and without a model, it tells a person where to look first in a change, who is able to look, and what
+nobody maintains. Every number it prints can be checked: `repolife why` shows the evidence behind a verdict,
+Python imports come from Python's own parser, ownership and churn are read from git history, and the order
+`triage` puts files in was backtested on real history. That is also why there is no risk score: the composite
+we tried did not beat its parts, so it was left out.
+
+It reads a repository and reports four things in one pass: how much code there is,
 how recently each file changed, whether anything still reaches it, and who has been maintaining it.
 It is built for coding agents (stable JSON, an agent skill, a `why` command to verify every claim)
 and is just as readable by a person. When a codebase outgrows what anyone can review, it answers
