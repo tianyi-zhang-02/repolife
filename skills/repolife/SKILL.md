@@ -1,23 +1,25 @@
 ---
 name: repolife
-description: Check which parts of a repository are alive, how its modules depend on each other and who maintains them before refactoring, cleaning up or asking for a review - code volume, git activity, unreachable (orphan) files, import cycles, what a change can break, and code nobody active owns. Use when asked about dead or unused code, repository health, what is safe to delete, what depends on a file, how modules relate, who owns or should review a path, or where to start a cleanup.
+description: Inspect repository structure, static reachability, Git activity and ownership when planning a change, reviewing its impact, investigating unused code or prioritizing maintenance.
 ---
 
 # repolife
 
 repolife reports five things about a repository: how much code there is, how recently it
 changed, whether anything still reaches it, who has been maintaining it, and how its modules depend on
-each other. It only reads; it never edits code.
+each other. Its analysis queries only read the repository.
 
 Pick the query by the task, and do not start every task with a full scan:
 
-- about to edit a file or directory: `repolife impact <path>` for what it reaches, the tests to run and who maintains it
+- about to edit a file or directory: `repolife impact <path>` for possible dependents, candidate tests and maintainers
 - preparing or doing a review: `repolife triage --since <base>` for which changed files deserve a person first
 - finishing a change: `repolife check --since <base>` for what it did to the structure
 - checking a claim about one file: `repolife why <path>` (`--format json` gives the same facts as data)
 - getting to know a repository, or planning a cleanup: `repolife scan` and `repolife graph`
 
 ## Run it
+
+For a repository overview:
 
 ```bash
 repolife scan . --format json
@@ -26,10 +28,15 @@ repolife scan . --format json
 The JSON goes to stdout; add `--out <file>` only when a task needs the report as a file. If `repolife` is not on
 PATH, try `python3 -m repolife ...`; if that fails too, the capability is unavailable: say so and follow the
 project's policy, and do not install or download anything to make a routine query work.
-Add `--format md` (the default) for a report meant to be read by a person, or `--format html --out report.html` for one
-self-contained page with the module graph and an impact explorer to open or share.
+Use `--format json` for structured query results; default text/Markdown is for reading. `scan` also supports
+`--format html --out report.html` for a self-contained overview with the module graph and an impact explorer.
 
-Read in this order: `summary` (sizes, status counts, orphan share), `cleanup.orphan_files`,
+Select the intended repository root: `scan` and `graph` take a positional root; path/change queries use
+`--repo <root>`. Before combining saved reports, check `meta.repo`, `meta.git` and, for change queries,
+`meta.change`: HEAD, the revision used for history and the comparison base can differ. Missing or skipped
+analysis is unavailable evidence, not an empty success.
+
+For a scan, read `summary` (sizes, status counts, orphan share), `cleanup.orphan_files`,
 `cleanup.test_only_files`, then `hotspots` and `directories` for where change is concentrated,
 and `ownership` for who maintains what.
 
@@ -37,22 +44,38 @@ and `ownership` for who maintains what.
 
 ```bash
 repolife graph . --format json
-repolife impact <file-or-directory>
+repolife impact <file-or-directory> --format json
 ```
 
 `graph` rolls the import graph up into modules (directories, split by size; `--module-depth N` fixes the
-depth). Read `cycles` first: modules that depend on each other cannot be understood or released alone, and
-each cycle lists the dependencies to cut or invert to break it (`cut`, with an example import to look at).
+depth). Read `cycles` for areas needing joint context; each lists heuristic candidates to cut or invert
+(`cut`, with an example reference to inspect), not an approved architecture change.
 `modules[].used_by` is how many modules depend on one: a change in a module with a high `used_by` needs
-more care. `--level file` gives every import as a pair, `--format mermaid` or `dot` draws the modules.
+more context. `--level file` gives file pairs; `--format mermaid` or `dot` draws the modules. This legacy graph
+excludes Python parent-package and inferred edges, while JS/TS can include resolved string/dynamic references.
+Do not assume its edges match either impact policy.
 
-Before changing a widely used file, run `repolife impact <path>`. `dependents` are the code files that import
-it directly or through others (`by_distance` says how far; `--hops 1` keeps only direct importers),
-`tests.paths` are the tests that reach it (run those), `owners` are the people who maintain the affected code
-(tell them), and `depends_on` is what it relies on.
+`impact` follows relationships backwards. Its default `all` policy includes recognized imports, Python parent
+packages, supported dynamic patterns, string references and unclassified plugin edges. Read `edges.policy` and
+`edges.hops` with the counts. `edges.imports_only` gives the narrower code/test counts at the same hop limit;
+`edges.references` shows counted, capped examples of inferred or unknown edges. These describe the frontier
+visited, not every such edge in the repository.
 
-Edges are static imports. Importing `a.b.c` does not make a file depend on the package `a`; names in strings,
-dynamic imports and registries are not edges, so a missing edge is not proof that nothing depends on a file.
+When a review question needs the import-based view, use `repolife impact <path> --edges imports --format json`.
+It keeps recognized dependency syntax and Python parent packages: importing `a.b.c` can run `a/__init__.py`.
+It excludes string, computed/glob and unknown edges; `edges.excluded` and `edges.unclassified` disclose those
+encountered. Evidence labels describe syntax, not execution: Python literal `import_module("pkg.mod")` currently
+counts as a string, while JS literal `import("./x")` is recognized dependency syntax. Keep the broad evidence
+available when narrowing; fewer dependents do not establish that other files are unaffected.
+If an older CLI lacks the flag or evidence fields, state that limitation and use the available broad facts;
+do not label them import-only or install another version to complete a routine query.
+
+`dependents.by_distance` counts selected edges; `--hops 1` keeps one-step dependents. `depends_on` is a separate
+one-step forward summary, not the reverse walk. `owners` supplies maintenance history for the project's review
+process. `tests.paths` and triage's `tests.nearest` are candidate paths, not commands or execution records: map
+them to the project's test runner and retain its required checks. Empty, shortened or narrowed lists do not
+justify skipping other tests. Record actual test results separately. Runtime wiring and external consumers
+can remain invisible under either policy.
 
 ## Triage a change
 
@@ -63,7 +86,7 @@ repolife triage --since <base> --format json     # a branch against its base; wi
 Run it before you open a change and before you review one. `files` is the changed code, most active first: files
 that were committed to most in the last 90 days, then by lines changed. Fix and revert history (`fixes_90`),
 `dependents`, `owners` and `flags` are context shown beside the order, not part of it. `ripple` is code outside the
-change that imports the changed files, `tests.nearest` are the tests to run, `reviewers` are the people who maintain the
+change that imports the changed files, `tests.nearest` are candidate tests, `reviewers` are the people who maintain the
 files other than the authors, and `nobody_else_can_look` lists files only the author maintains. A flag
 `no active owner` means nobody who maintains the file has committed lately: say so where the change is described, so
 a person can decide who looks, and do not pick a reviewer from its last maintainers; whether that pauses the work is
@@ -79,13 +102,13 @@ repolife check --since <base> --format json --fail-on never     # without --sinc
 Run it when a task is done and before the change is opened. It compares the base of the change with the working
 tree and lists what the change did to the structure, `findings` ordered by `severity`. With `--fail-on never` the
 exit code stays 0 and the findings are yours to read; `--fail-on block` exits 1 on certain breakage and is for
-projects that have explicitly turned that gate on, not a default. `block` is certain breakage:
+projects that have explicitly turned that gate on, not a default. `block` flags a static reference to a deleted file:
 `dangling-import` means a file the change deleted is still imported by files it did not touch, so restore it or
 update the importers. `warn` needs a decision: `new-cycle` and `cycle-grew` name the new dependency that closed the
 loop, `new-orphan` is a new file nothing reaches (`how: stranded` is a file the change cut the last link to, with
 `was_reached_from`), and `no-active-owner` is changed code nobody active maintains (`needs_human`: a person decides who
 looks at it; do not pick a reviewer from its last maintainers, and do not stop on your own unless the team asks for
-that). `info` is the rest. Static imports only: a clean result is not proof.
+that). `info` is the rest. Findings are bounded by static analysis and its language coverage; a clean result is not proof.
 
 ## Ownership
 
@@ -134,8 +157,8 @@ cannot see that.
    `notes` (recently modified, mentioned in docs, lives under `scripts/`); show those to a human first.
 2. For each candidate run `repolife why <path>`. It shows who depends on the file, what config names
    it, and what else would be stranded by deleting it.
-3. Search the repository yourself for the module name and its public symbols: string lookups,
-   registries, entry points and consumers outside this repository are invisible to a static scan.
+3. Search the repository yourself for the module name and its public symbols: a static scan can miss string
+   lookups, registries and entry points, and cannot see consumers outside this repository.
 4. If it is really unused, delete it in a small change (one cluster of related files per change)
    and run the tests. If it is intentionally kept, add it to `keep` in `.repolife.toml` with a comment.
 5. For `test_only_files`, ask whether production code lost its caller. Do not delete tests to make
@@ -144,5 +167,5 @@ cannot see that.
 ## Do not
 
 - Delete anything from a single scan without step 2 and step 3.
-- Treat DORMANT or low activity as proof of anything. Only reachability says a file is unused.
+- Treat DORMANT or low activity as proof that code is unused. Reachability supplies cleanup candidates within its coverage.
 - Remove files a library exports to its users; list them under `keep` instead.

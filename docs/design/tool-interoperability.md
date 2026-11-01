@@ -78,6 +78,8 @@ Permanent tests should exercise meaningful mapping and CLI behavior. Independent
 
 **7. Next evidence to collect**
 
+The author's [2026-11-01 product direction](product-direction.md) prioritizes a real reviewer task and a concise evidence-backed review brief. Consumer trials and performance measurements below support that task; they are not an independent target to maximize integration coverage.
+
 Prioritize a real consumer trial over another adapter: open an export in a selected SARIF viewer and record how it presents file-level, grouped and locationless results. Test hosted uploads separately only when a project deliberately adopts them, including category, comparison-base changes and alert continuity. A successful schema check cannot settle those user-experience questions.
 
 For agent tasks, compare the current task-routed recipe against the host's ordinary search-and-test workflow on both Python and JS/TS projects. Measure relevant-file discovery, missed related tests, extra context, interruptions and latency. Measure repeated `impact`/`why`/`check` analysis before deciding whether request-local reuse or a combined context query earns its complexity. Any reuse must invalidate on worktree, configuration and comparison changes.

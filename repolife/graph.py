@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Collection, Iterable, Mapping
 
 from . import inventory
-from .analyzers import LanguageResult
+from .analyzers import LanguageResult, note
 from .textrefs import PathIndex, TextScan
 
 
@@ -42,8 +42,13 @@ class Graph:
     config_refs: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))  # file -> configs/scripts naming it
     doc_refs: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))  # file -> docs mentioning it
     inbound: dict[str, set[str]] = field(default_factory=lambda: defaultdict(set))  # file -> files depending on it
+    provenance: dict[str, dict[str, str]] = field(default_factory=dict)  # file -> target -> kind of evidence (analyzers.KINDS); "unknown" when the analyzer gave none
     prod_parent: dict[str, str | None] = field(default_factory=dict)
     test_parent: dict[str, str | None] = field(default_factory=dict)
+
+    def kind(self, src: str, dst: str) -> str:
+        """The strongest evidence an analyzer recorded for the edge src -> dst; "unknown" when it recorded none."""
+        return self.provenance.get(src, {}).get(dst, "unknown")
 
     def reachability(self, path: str) -> str | None:
         if path not in self.analyzed:
@@ -86,6 +91,10 @@ def build(
             g.edges.setdefault(path, set()).update(targets)
         for path, targets in res.indirect.items():
             g.indirect.setdefault(path, set()).update(targets)
+        for path, kinds in res.provenance.items():
+            mine = g.provenance.setdefault(path, {})
+            for target, kind in kinds.items():
+                note(mine, target, kind)
         for path, why in res.roots.items():
             g.roots.setdefault(path, []).extend(why)
         g.tests |= res.tests
@@ -121,6 +130,7 @@ def build(
         for t in targets:
             if t != src:
                 g.inbound[t].add(src)
+                g.provenance.setdefault(src, {}).setdefault(t, "unknown")  # an analyzer that predates provenance
 
     g.roots = {p: why for p, why in g.roots.items() if p not in g.tests}
     g.prod_parent = _bfs(g.roots, g.edges)

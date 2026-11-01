@@ -151,7 +151,7 @@ def _cmd_impact(args: argparse.Namespace) -> int:
     root = _root(args.repo)
     analysis = analyze(root, _config_for(root, args))
     try:
-        found = modules.impact(analysis, args.target, args.module_depth, hops=args.hops)
+        found = modules.impact(analysis, args.target, args.module_depth, hops=args.hops, edges=args.edges)
     except TargetError as exc:
         print(f"repolife: {exc}", file=sys.stderr)
         return 2
@@ -226,7 +226,8 @@ def build_parser() -> argparse.ArgumentParser:
     impact.add_argument("target", help="file path, directory, or dotted package name")
     impact.add_argument("--repo", default=".", help="repository root (default: .)")
     impact.add_argument("--format", choices=("text", "json"), default="text")
-    impact.add_argument("--hops", type=_positive, metavar="N", help="follow imports at most N steps away (default: all of them)")
+    impact.add_argument("--hops", type=_positive, metavar="N", help="follow edges at most N steps away (default: all of them)")
+    impact.add_argument("--edges", choices=("all", "imports"), default="all", help="which evidence to follow: all = recognized dependency syntax, package files and references found in strings or dynamic loading (default); imports = recognized dependency syntax and package files only")
     impact.add_argument("--module-depth", type=_positive, metavar="N", help="group dependents by the first N directories (default: split by size)")
     impact.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
     _add_analysis_options(impact)

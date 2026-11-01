@@ -16,6 +16,7 @@ from . import __version__, meta
 from .analyze import Analysis
 from .explain import TargetError, resolve_target
 from .model import SCHEMA_VERSION, STATUSES
+from .analyzers import KINDS
 from .ownership import Area, owner_rows, rollup
 
 MIN_CAP = 20  # a directory with at most this many files is never split
@@ -24,6 +25,9 @@ MAX_DEPTH = 6
 EXAMPLES = 3  # sample imports kept per dependency
 IMPACT_OWNERS = 5  # people listed as affected by a change
 IMPACT_TESTS = 40  # test files listed per impact
+POLICIES = {"all": frozenset(KINDS), "imports": frozenset({"import", "package"})}  # `impact --edges`: which evidence to follow
+REFERENCE_KINDS = frozenset({"dynamic", "string", "unknown"})  # evidence that is not recognized dependency syntax
+REFERENCES_LISTED = 8  # references listed in the impact result; the count is always complete
 
 CAVEATS = [
     "Edges are static imports between files in this repository. Dynamic imports, plugin registries, "
@@ -339,22 +343,52 @@ def _only_analysed(a: Analysis, label: str, kind: str, files: list[str]) -> tupl
     return label, kind, files
 
 
-def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPACT_TESTS, hops: int | None = None) -> dict:
-    """Everything that would be affected by changing `target`: files that import it directly or through others,
-    following at most `hops` imports. A package's `__init__` runs for every import beneath it, so those count."""
-    label, kind, seeds = resolve_seeds(a, target)
+def _walk(a: Analysis, seeds: list[str], hops: int | None, allowed: frozenset[str]) -> tuple[dict[str, int], dict]:
+    """Breadth-first over the dependents of `seeds`, following only edges whose evidence kind is in `allowed`.
+
+    Returns the distance of every file reached and the statistics of the walk. Every inbound edge of an expanded
+    node is counted once per (source, target) pair, followed or excluded by its kind; a node at the hop limit is not
+    expanded, so the counts describe the visited frontier, not every edge in the repository. A followed edge may
+    lead to a file already reached, so edge counts are not file counts."""
     g = a.graph
-    seed_set = set(seeds)
     dist = {s: 0 for s in seeds}
     queue = deque(seeds)
+    followed: Counter[str] = Counter()
+    excluded: Counter[str] = Counter()
+    references: list[dict] = []  # the edges met that are not recognized dependency syntax, in walk order
+    unknown_from: set[str] = set()  # files whose analyzer gave no provenance for an edge met
     while queue:
         node = queue.popleft()
         if hops is not None and dist[node] >= hops:
             continue
         for dependent in sorted(g.inbound.get(node, ())):
+            kind = g.kind(dependent, node)
+            if kind in REFERENCE_KINDS:
+                references.append({"from": dependent, "to": node, "kind": kind})
+                if kind == "unknown":
+                    unknown_from.add(dependent)
+            if kind not in allowed:
+                excluded[kind] += 1
+                continue
+            followed[kind] += 1
             if dependent not in dist:
                 dist[dependent] = dist[node] + 1
                 queue.append(dependent)
+    return dist, {"followed": followed, "excluded": excluded, "references": references, "unknown_from": unknown_from}
+
+
+def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPACT_TESTS, hops: int | None = None, edges: str = "all") -> dict:
+    """Everything that would be affected by changing `target`: files that depend on it directly or through others,
+    following at most `hops` edges of the kinds the policy `edges` allows ("all": every edge an analyzer found;
+    "imports": recognized dependency syntax and the package initializers Python runs for it). A package's
+    `__init__` runs for every import beneath it, so those count under both policies."""
+    if edges not in POLICIES:
+        raise ValueError(f"unknown edge policy {edges!r}; choose one of {', '.join(POLICIES)}")
+    label, kind, seeds = resolve_seeds(a, target)
+    g = a.graph
+    seed_set = set(seeds)
+    allowed = POLICIES[edges]
+    dist, walk = _walk(a, seeds, hops, allowed)
     affected = {p: d for p, d in dist.items() if p not in seed_set and p in a.records}
     prod = {p: d for p, d in affected.items() if not a.records[p].is_test}
     tests = {p: d for p, d in affected.items() if a.records[p].is_test}
@@ -373,13 +407,28 @@ def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPA
         modules.append(row)
     modules.sort(key=lambda r: (-r["files"], r["module"]))
 
-    needs: dict[str, set[str]] = defaultdict(set)
+    needs: dict[str, set[str]] = defaultdict(set)  # forward: what the seeds name as dependencies, never the reverse walk
     for s in seeds:
         for dep in _imported(a, s):
-            if dep not in seed_set and dep in a.records and not a.records[dep].is_test:
+            if dep not in seed_set and dep in a.records and not a.records[dep].is_test and (edges == "all" or g.kind(s, dep) in allowed):
                 needs[module_of.get(dep, ".")].add(dep)
 
     ordered_tests = sorted(tests, key=lambda p: (tests[p], p))
+    refs = walk["references"]
+    unknown_edges = walk["followed"]["unknown"] + walk["excluded"]["unknown"]
+    evidence = {
+        "policy": edges,
+        "hops": hops,
+        "kinds": [k for k in KINDS if k in allowed],
+        "followed": {k: walk["followed"][k] for k in KINDS if k in allowed},
+        "excluded": {k: walk["excluded"][k] for k in KINDS if k not in allowed},
+        "references": {"count": len(refs), "limit": REFERENCES_LISTED, "listed": refs[:REFERENCES_LISTED]},
+        "unclassified": {"edges": unknown_edges, "analyzers": sorted({a.records[p].analyzer or "?" for p in walk["unknown_from"] if p in a.records})},
+    }
+    if edges == "all":  # what the narrower policy would reach from the same seeds under the same hop limit
+        narrow, _ = _walk(a, seeds, hops, POLICIES["imports"])
+        reached = [p for p, d in narrow.items() if p not in seed_set and p in a.records]
+        evidence["imports_only"] = {"files": sum(not a.records[p].is_test for p in reached), "tests": sum(a.records[p].is_test for p in reached)}
     out = {
         "target": label,
         "kind": kind,
@@ -396,6 +445,7 @@ def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPA
             "modules": modules,
         },
         "tests": {"files": len(tests), "direct": sum(d == 1 for d in tests.values()), "paths": ordered_tests[:limit]},
+        "edges": evidence,
         "depends_on": [{"module": k, "files": len(v)} for k, v in sorted(needs.items(), key=lambda kv: (-len(kv[1]), kv[0]))],
     }
     if a.ownership is not None:
@@ -412,7 +462,7 @@ EXPLORER_MAX_FILES = 20000  # past this the page would be too heavy to carry the
 
 def explorer(a: Analysis) -> dict | None:
     """Everything a browser needs to answer `impact` for any file or directory: the analysed code files, the
-    modules the non-test ones fall into, who owns each, and every import (flagged when no statement makes it).
+    modules the non-test ones fall into, who owns each, and each relationship's legacy flag and evidence kind.
     None when there is nothing to explore or too much of it."""
     paths = sorted(p for p, r in a.records.items() if r.kind == "code" and r.analyzer)
     if not paths or len(paths) > EXPLORER_MAX_FILES:
@@ -432,10 +482,10 @@ def explorer(a: Analysis) -> dict | None:
                 people[r.owner] = len(people_rows)
                 people_rows.append({"name": r.owner, "idle_days": r.owner_idle_days})
             who = people[r.owner]
-        files.append([p, keys.index(module_of[p]) if p in module_of else -1, r.code, int(r.is_test), who])
+        files.append([p, keys.index(module_of[p]) if p in module_of else -1, r.code, int(r.is_test), who, r.analyzer])
     index = {p: i for i, p in enumerate(paths)}
     edges = sorted(
-        (index[s], index[t], int(t in g.indirect.get(s, ())))
+        (index[s], index[t], int(t in g.indirect.get(s, ())), g.kind(s, t))
         for s in paths
         for t in g.edges.get(s, ())
         if t in index and t != s

@@ -11,7 +11,7 @@ import posixpath
 import re
 from typing import Mapping
 
-from . import Analyzer, LanguageResult, Repo
+from . import Analyzer, LanguageResult, Repo, note
 from .jslex import Scan, scan
 from .jsproject import Resolver
 
@@ -66,6 +66,7 @@ class JavaScriptAnalyzer(Analyzer):
     def run(self, files: Mapping[str, str], repo: Repo) -> LanguageResult:
         res = Resolver(repo, files)
         edges: dict[str, set[str]] = {}
+        provenance: dict[str, dict[str, str]] = {}
         unparsed: set[str] = set()
         roots: dict[str, list[str]] = {}
         tests = {p for p in files if is_test_path(p)}
@@ -76,18 +77,36 @@ class JavaScriptAnalyzer(Analyzer):
                 unparsed.add(path)
                 continue
             deps: set[str] = set()
-            for spec in found.specs:
-                deps |= res.resolve(path, spec)
+            prov: dict[str, str] = {}  # target -> strongest kind of evidence; see analyzers.KINDS
+            for spec in found.specs:  # recognized literal dependency syntax: import, export from, require, literal import(), new URL, reference path, script src
+                hit = res.resolve(path, spec)
+                deps |= hit
+                for t in hit:
+                    note(prov, t, "import")
             for value in found.strings:
-                deps |= res.resolve_string(path, value)
+                hit = res.resolve_string(path, value)
+                deps |= hit
+                for t in hit:
+                    note(prov, t, "string")
             for d in found.dynamic:
-                deps |= res.dynamic(path, d.head, d.tail, d.deep)
+                hit = res.dynamic(path, d.head, d.tail, d.deep)
+                deps |= hit
+                for t in hit:
+                    note(prov, t, "dynamic")
             for pattern in found.globs:
-                deps |= res.glob(path, pattern)
+                hit = res.glob(path, pattern)
+                deps |= hit
+                for t in hit:
+                    note(prov, t, "dynamic")
             for directory, deep, regex in found.contexts:
-                deps |= res.context(path, directory, deep, regex)
+                hit = res.context(path, directory, deep, regex)
+                deps |= hit
+                for t in hit:
+                    note(prov, t, "dynamic")
             deps.discard(path)
+            prov.pop(path, None)
             edges[path] = deps
+            provenance[path] = prov
 
             why: list[str] = []
             name = posixpath.basename(path)
@@ -115,4 +134,4 @@ class JavaScriptAnalyzer(Analyzer):
             roots.setdefault(path, []).extend(why)
         roots = {p: why for p, why in roots.items() if p in files and p not in tests}
 
-        return LanguageResult(edges=edges, roots=roots, tests=tests, unparsed=unparsed, resolve_reference=lambda ref: set())
+        return LanguageResult(edges=edges, roots=roots, tests=tests, unparsed=unparsed, resolve_reference=lambda ref: set(), provenance=provenance)

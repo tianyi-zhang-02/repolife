@@ -150,15 +150,17 @@ def impact_text(imp: dict) -> str:
     what = f"{imp['target']}  ({imp['files']} file{'s' if imp['files'] != 1 else ''}, {_n(imp['code'])} code lines)"
     out = [f"Changing {what} can affect:", ""]
     if not d["files"] and not t["files"]:
-        out.append("Nothing imports it: no file in the analysed set depends on it, directly or through others.")
+        out.append("- no file in the analysed set depends on it through the followed edges")
     else:
         out.append(
             f"- **{_many(d['files'], 'code file')}** in **{_many(len(d['modules']), 'module')}** ({d['share']}% of the code), "
-            f"{_n(d['direct'])} of them importing it directly"
+            f"{_n(d['direct'])} of them directly (one followed edge away)"
         )
-        out.append(f"- **{_many(t['files'], 'test file')}**, {_n(t['direct'])} importing it directly")
+        out.append(f"- **{_many(t['files'], 'test file')}** reaching it (candidates to run, not runs), {_n(t['direct'])} directly")
         if len(d['by_distance']) > 1:
-            out.append("- code files by number of imports away: " + ", ".join(f"{n}: {_n(c)}" for n, c in enumerate(d['by_distance'], 1)))
+            out.append("- code files by number of followed edges away: " + ", ".join(f"{n}: {_n(c)}" for n, c in enumerate(d['by_distance'], 1)))
+    if imp.get("edges"):
+        out.append("- " + _policy(imp["edges"]))
     out.append("")
     if d["modules"]:
         gone = imp.get("inactive_days", 0)
@@ -179,5 +181,32 @@ def impact_text(imp: dict) -> str:
         out += [f"Tests that reach it, nearest first: {shown}" + (f" and {t['files'] - 10} more" if t["files"] > 10 else ""), ""]
     if imp["depends_on"]:
         out += ["It depends on: " + ", ".join(f"`{r['module']}` ({r['files']})" for r in imp["depends_on"][:10]), ""]
-    out.append("Static imports only: dynamic loading, registries and consumers outside this repository are not counted.")
+    out.append(
+        "Static analysis of this repository under the selected edge policy and hop limit: registries, dependency injection and "
+        "consumers outside the repository are not counted, and a file outside this set is not shown to be unaffected."
+    )
     return "\n".join(out) + "\n"
+
+
+def _policy(e: dict) -> str:
+    """One line saying which evidence the walk followed, what it met and did not follow, and what imports alone reach."""
+    refs = e["references"]
+    example = ""
+    if refs["listed"]:
+        first = refs["listed"][0]
+        example = f" (for example `{first['from']}` → `{first['to']}`, {first['kind']})"
+    unknown = e["unclassified"]
+    tail = f"; {_many(unknown['edges'], 'edge')} from {', '.join(unknown['analyzers']) or 'an analyzer'} without provenance" if unknown["edges"] else ""
+    steps = f"at most {_many(e['hops'], 'step')}" if e["hops"] is not None else "any number of steps"
+    if e["policy"] == "imports":
+        skipped = sum(e["excluded"].values())
+        return (
+            f"edges followed, {steps}: recognized dependency syntax and the package files Python runs for it; "
+            f"{_many(skipped, 'string, dynamic or unclassified edge')} met at the frontier not followed{example}{tail}"
+        )
+    narrow = e["imports_only"]
+    return (
+        f"edges followed, {steps}: recognized dependency syntax, package files, and {_many(refs['count'], 'reference')} found in strings, "
+        f"dynamic loading or unclassified evidence{example}; syntax and package files alone reach {_many(narrow['files'], 'code file')} and "
+        f"{_many(narrow['tests'], 'test file')}{tail}"
+    )

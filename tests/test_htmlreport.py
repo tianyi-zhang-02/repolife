@@ -279,7 +279,7 @@ vm.createContext(ctx);
 new vm.Script(pick('app')).runInContext(ctx);
 const core = ctx.RepolifeCore;
 const jobs = JSON.parse(fs.readFileSync(targetsPath, 'utf8'));
-const out = jobs.map(([name, hops]) => core.impactOf(data.explorer, name, hops));
+const out = jobs.map(([name, hops, policy = 'all']) => core.impactOf(data.explorer, name, hops, null, policy));
 process.stdout.write(JSON.stringify(out));
 """
 
@@ -288,19 +288,19 @@ process.stdout.write(JSON.stringify(out));
 class ExplorerDifferentialTest(TempRepo):
     """The page answers `impact` in the browser; it must give the numbers `repolife impact` gives."""
 
-    def check(self, a, targets, hops_list=(None, 1, 2)):
+    def check(self, a, targets, hops_list=(None, 1, 2), policies=('all',)):
         html = page_for(a)
         (self.root / "page.html").write_text(html, encoding="utf-8")
-        jobs = [[t, h] for t in targets for h in hops_list]
+        jobs = [[t, h, p] for t in targets for h in hops_list for p in policies]
         (self.root / "jobs.json").write_text(json.dumps(jobs), encoding="utf-8")
         (self.root / "run.js").write_text(NODE_RUNNER, encoding="utf-8")
         run = subprocess.run(["node", str(self.root / "run.js"), str(self.root / "page.html"), str(self.root / "jobs.json")], capture_output=True, text=True, timeout=120)
         self.assertEqual(run.returncode, 0, run.stderr)
         results = json.loads(run.stdout)
         self.assertEqual(len(results), len(jobs))
-        for (target, hops), got in zip(jobs, results):
-            want = modules.impact(a, target, hops=hops)
-            label = f"{target} hops={hops}"
+        for (target, hops, policy), got in zip(jobs, results):
+            want = modules.impact(a, target, hops=hops, edges=policy)
+            label = f"{target} hops={hops} edges={policy}"
             self.assertNotIn("error", got, label)
             self.assertEqual((got["target"], got["kind"], got["files"], got["code"]), (want["target"], want["kind"], want["files"], want["code"]), label)
             for key in ("direct", "files", "code", "by_distance"):
@@ -313,6 +313,25 @@ class ExplorerDifferentialTest(TempRepo):
             )
             self.assertEqual(got["tests"], want["tests"], label)
             self.assertEqual(got["depends_on"], want["depends_on"], label)
+            self.assertEqual(got["edges"], want["edges"], label)
+
+    def test_both_policies_with_python_packages_and_typescript_inference(self):
+        from test_provenance import PYTHON, TYPESCRIPT
+
+        write_tree(self.root, {**PYTHON, **TYPESCRIPT})
+        a = scan(self.root)
+        targets = sorted(a.records) + ['pkg', 'pkg/sub', 'src', 'tests']
+        self.check(a, targets, policies=('all', 'imports'))
+
+    def test_unknown_plugin_evidence_and_bounded_reference_examples(self):
+        from repolife.analyzers.python import PythonAnalyzer
+        from test_provenance import PYTHON, Stub
+
+        write_tree(self.root, {**PYTHON, 'main.go': 'package main\n', **{
+            f'guess{i}.py': 'VALUE = "pkg.sub.leaf"\n' for i in range(12)
+        }})
+        a = analyze(self.root, config.load(self.root), analyzers=[PythonAnalyzer(), Stub()])
+        self.check(a, ['pkg/sub/leaf.py', 'pkg', 'main.go'], policies=('all', 'imports'))
 
     def test_a_small_project(self):
         write_tree(self.root, PROJECT)
@@ -323,13 +342,13 @@ class ExplorerDifferentialTest(TempRepo):
         write_tree(self.root, CYCLE)
         write_tree(self.root, {"x.py": "import a.b.c\n\nif __name__ == '__main__':\n    print(a.b.c)\n", "a/b/__init__.py": "", "a/b/c.py": "VALUE = 1\n"})
         a = scan(self.root)
-        self.check(a, [p for p, r in a.records.items() if r.analyzer] + ["a", "a/b", "b"])
+        self.check(a, [p for p, r in a.records.items() if r.analyzer] + ["a", "a/b", "b"], policies=('all', 'imports'))
 
     def test_this_repository(self):
         a = analyze(REPO, config.load(REPO))
         files = sorted(p for p, r in a.records.items() if r.analyzer)
         folders = sorted({p.rpartition("/")[0] for p in files if "/" in p})
-        self.check(a, files + folders)
+        self.check(a, files + folders, policies=('all', 'imports'))
 
     def test_bad_targets_are_refused_in_the_browser_too(self):
         write_tree(self.root, PROJECT)

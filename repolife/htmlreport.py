@@ -153,6 +153,11 @@ def _overview(report: dict, graph: dict | None) -> str:
     return f"""<section id="overview">
 <h1>{e(report['repo']['name'])}</h1>
 <p class="lede">{' · '.join(meta)}</p>
+<div class="start-points" aria-label="Start with a question">
+  <a href="#modules"><span class="start-icon" aria-hidden="true">⌘</span><strong>Understand the system</strong><span>Explore modules and their relationships</span><b aria-hidden="true">↗</b></a>
+  <a href="#impact"><span class="start-icon" aria-hidden="true">↳</span><strong>Explore a change</strong><span>Trace dependents and candidate tests</span><b aria-hidden="true">↗</b></a>
+  <a href="#attention"><span class="start-icon" aria-hidden="true">◉</span><strong>Find maintenance work</strong><span>See the evidence worth looking at</span><b aria-hidden="true">↗</b></a>
+</div>
 <div class="card">
   <div class="hero">{n(s['code_lines'])}</div>
   <div class="sub">lines of code in {n(s['files'])} files{f' ({langs})' if langs else ''}</div>
@@ -408,14 +413,15 @@ def _impact_section(explorer: dict | None) -> str:
 <div class="card"><p class="empty">Not available: there are no analysed code files, or too many to carry in one page. Run <code>repolife impact</code> instead.</p></div></section>"""
     return """<section id="impact">
 <h2>What does a change reach?</h2>
-<p class="lede">Pick a file or a directory to see which code imports it, directly or through others, which tests reach it and who maintains the affected files. It follows static imports only.</p>
+<p class="lede">Follow a file or directory through this repository. Compare the broad evidence with recognized imports and Python parent packages. These are possible effects, not runtime guarantees.</p>
 <div class="card explorer">
   <div class="tools">
     <input type="text" id="impact-q" list="impact-list" placeholder="src/app/main.py or src/app" autocomplete="off" spellcheck="false" aria-label="File or directory">
-    <select id="impact-hops" aria-label="How far to follow imports"><option value="">All imports</option><option value="1">Direct importers only</option><option value="2">Two steps</option><option value="3">Three steps</option></select>
+    <select id="impact-edges" aria-label="Relationship evidence"><option value="all">All relationships</option><option value="imports">Import-based relationships</option></select>
+    <select id="impact-hops" aria-label="How far to follow relationships"><option value="">Any number of steps</option><option value="1">One step</option><option value="2">Two steps</option><option value="3">Three steps</option></select>
   </div>
   <datalist id="impact-list"></datalist>
-  <div class="result" id="impact-out"><noscript>This explorer needs scripts. Run <code>repolife impact &lt;path&gt;</code> for the same answer.</noscript></div>
+  <div class="result" id="impact-out" aria-live="polite"><noscript>This explorer needs scripts. Run <code>repolife impact &lt;path&gt;</code> for the same answer.</noscript></div>
 </div>
 </section>"""
 
@@ -600,7 +606,14 @@ def _cleanup(report: dict) -> str:
 def _notes(report: dict) -> str:
     s = report["settings"]
     an = report["analysis"]
+    scope = report.get("meta", {})
+    history = scope.get("git", {})
     facts = [
+        ("Code snapshot", "Files read at generation time; Git HEAD is a history reference, not a clean-worktree assertion"),
+        ("Captured", report["generated_at"]),
+        ("Repository", str(scope.get("repo", {}).get("root", report["repo"]["name"]))),
+        ("History HEAD", str(history.get("head") or report["git"].get("head") or "unavailable")),
+        ("History reference", str(history.get("history_rev") or "unavailable")),
         ("Analyzers", ", ".join(report["summary"]["reachability_coverage"]["analyzers"]) or "none"),
         ("Active window", f"{s['active_days']} days"),
         ("Dormant after", f"{s['dormant_days']} days"),
@@ -616,7 +629,7 @@ def _notes(report: dict) -> str:
     return f"""<section id="notes">
 <h2>Read this with care</h2>
 <div class="card"><ul class="caveats">{''.join(f'<li>{e(c)}</li>' for c in report['caveats'])}</ul>
-<details><summary>Settings used</summary><div class="detail"><dl>{dl}</dl></div></details></div>
+<details><summary>Snapshot and settings</summary><div class="detail"><dl>{dl}</dl></div></details></div>
 </section>"""
 
 
@@ -631,7 +644,12 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
         "graph": {"modules": graph["modules"]} if has_graph else None,
         "explorer": explorer,
     }
-    nav = [("overview", "Overview"), ("attention", "Look first"), ("directories", "Directories"), ("modules", "Modules"), ("impact", "Impact"), ("ownership", "Ownership"), ("review", "Review"), ("hotspots", "Hotspots"), ("cleanup", "Cleanup"), ("notes", "Notes")]
+    nav = [
+        ("Understand", [("overview", "Overview", "◈"), ("modules", "System map", "⌘"), ("directories", "Directories", "▤")]),
+        ("Explore change", [("impact", "Impact explorer", "↳"), ("review", "Change volume", "≋")]),
+        ("Maintain", [("attention", "Look first", "◉"), ("ownership", "Maintainers", "◎"), ("hotspots", "Hotspots", "↗"), ("cleanup", "Cleanup", "◇")]),
+        ("Report", [("notes", "Analysis notes", "ⓘ")]),
+    ]
     body = "\n".join(
         part
         for part in (
@@ -648,7 +666,17 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
         )
         if part
     )
-    links = "".join(f'<a href="#{i}">{t}</a>' for i, t in nav)
+    links = "".join(
+        f'<div class="nav-group"><p class="nav-label">{group}</p>'
+        + "".join(f'<a href="#{i}" data-view="{i}"><span class="nav-icon" aria-hidden="true">{icon}</span><span>{label}</span></a>' for i, label, icon in items)
+        + "</div>"
+        for group, items in nav
+    )
+    scope = report.get("meta", {})
+    repo_root = scope.get("repo", {}).get("root", report["repo"]["name"])
+    head = scope.get("git", {}).get("head") or report["git"].get("head")
+    revision = str(head)[:8] if head else "History unavailable"
+    captured = report["generated_at"].replace("T", " ").replace("Z", " UTC")
     return f"""<!doctype html>
 <html lang="en">
 <head>
@@ -661,11 +689,28 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
 <style>{CSS}</style>
 </head>
 <body>
-<header class="top"><div class="wrap bar"><strong>repolife</strong><nav aria-label="Sections">{links}</nav><button class="btn" id="theme" type="button">Theme: auto</button></div></header>
-<main class="wrap">
+<a class="skip-link" href="#workspace-content">Skip to report</a>
+<aside class="workspace-rail">
+  <div class="wordmark"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 25V12a5 5 0 0 1 10 0v8a5 5 0 0 0 10 0V7M7 17h20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><strong>repolife<span class="brand-dot">.</span></strong></div>
+  <p class="brand-caption">Keep code understandable.</p>
+  <div class="repo-context" title="{e(str(repo_root))}"><span class="context-label">REPOSITORY</span><strong>{e(report['repo']['name'])}</strong><span class="mono">{e('History HEAD ' + revision if head else revision)}</span></div>
+  <button class="quick-trigger script-only" id="quick-trigger" type="button" aria-haspopup="dialog"><span>Find a file or view</span><kbd id="quick-shortcut">⌘ K</kbd></button>
+  <nav aria-label="Sections">{links}</nav>
+  <div class="rail-bottom"><span class="snapshot-dot" aria-hidden="true"></span>Local snapshot <a href="#notes">Analysis limits ↗</a></div>
+</aside>
+<div class="workspace-main">
+<header class="workspace-top"><div class="workspace-breadcrumb"><span>{e(report['repo']['name'])}</span><span aria-hidden="true">/</span><strong id="current-view">Overview</strong></div><div class="snapshot-meta"><span class="snapshot-captured" title="{e(captured)}">Captured {e(report['generated_at'][:10])}</span><span class="snapshot-revision mono" title="History HEAD; code was read from current files">{e(revision if head else 'No history')}</span><button class="btn script-only" id="theme" type="button">Theme: auto</button></div></header>
+<main class="wrap" id="workspace-content" tabindex="-1">
 {body}
 </main>
 <footer class="wrap">Generated by repolife {e(__version__)}. A static analysis of this repository: it reads code and git history and never edits anything.</footer>
+</div>
+<dialog id="quick-open" aria-labelledby="quick-title">
+  <div class="quick-heading"><strong id="quick-title">Go to a file or view</strong><button class="btn" type="button" id="quick-close" aria-label="Close quick navigation">Esc</button></div>
+  <input id="quick-query" type="search" role="combobox" aria-label="Find a file or view" aria-controls="quick-results" aria-expanded="false" aria-autocomplete="list" autocomplete="off" placeholder="Search this snapshot…">
+  <div id="quick-results" role="listbox" aria-label="Matching files and views"></div>
+  <div class="quick-footer"><span id="quick-count" role="status"></span><span>↑ ↓ to select <span aria-hidden="true">·</span> Enter to open</span></div>
+</dialog>
 <script type="application/json" id="data">{_json(data)}</script>
 <script id="app">{JS}</script>
 </body>

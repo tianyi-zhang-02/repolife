@@ -13,6 +13,9 @@ The reachability engine (graph.py) knows nothing about any language. It consumes
              so that nothing they might import is wrongly reported as unused
   resolve_reference
              maps a name found in config/scripts (`pkg.mod.Class`) to files
+  provenance optional: file -> target -> the kind of evidence behind that edge, one of KINDS below, the
+             strongest when several apply. `impact` uses it to follow only recognized dependency syntax
+             on request; an analyzer that leaves it empty keeps working and its edges count as "unknown"
 
 To support a new language, subclass `Analyzer` and register it, either in
 `BUILTIN` below or from a third-party package through the `repolife.analyzers`
@@ -39,6 +42,23 @@ class Repo:
     read: Callable[[str], str | None]  # None when the file is missing, binary or too large
 
 
+# Kinds of evidence behind an edge, strongest first. "import": recognized literal dependency syntax names the
+# target (a Python import statement; for JS/TS an import, export-from, require, literal import(), new URL or
+# reference path). "package": a parent package initializer that Python runs for such a statement. "dynamic": a
+# supported computed-import, glob or context pattern expands to the target. "string": a dotted name or path in an
+# ordinary string resolves to it. "unknown": the analyzer gave no provenance. The names describe evidence, not
+# what runs.
+KINDS = ("import", "package", "dynamic", "string", "unknown")
+_RANK = {kind: i for i, kind in enumerate(KINDS)}
+
+
+def note(provenance: dict[str, str], target: str, kind: str) -> None:
+    """Record `kind` for `target`, keeping the strongest evidence seen for the pair."""
+    old = provenance.get(target)
+    if old is None or _RANK[kind] < _RANK[old]:
+        provenance[target] = kind
+
+
 @dataclass
 class LanguageResult:
     edges: dict[str, set[str]] = field(default_factory=dict)
@@ -48,6 +68,7 @@ class LanguageResult:
     unparsed: set[str] = field(default_factory=set)
     comment_lines: dict[str, set[int]] = field(default_factory=dict)  # extra lines to count as comments (docstrings)
     resolve_reference: Callable[[str], set[str]] = lambda ref: set()
+    provenance: dict[str, dict[str, str]] = field(default_factory=dict)  # file -> target -> kind, see KINDS; last, so positional callers keep working
 
 
 class Analyzer(ABC):

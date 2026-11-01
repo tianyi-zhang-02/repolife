@@ -1,5 +1,9 @@
 # repolife workflow integration design
 
+Product priorities follow the author's [2026-11-01 direction](product-direction.md): help maintainers keep growing codebases understandable, reviewable and maintainable. Interoperability is evaluated through that task, with a reviewer workflow as the next product test.
+
+The first [review brief prototype](review-brief.md) composes existing queries for a fixed real commit, keeps authored review questions separate from observations, and records actual validation separately from test candidates. It introduces no new CLI command or ranking rule.
+
 Design reviewed on 2026-10-30; structured queries, reversible integration and portable change reports are implemented in the local working tree on 2026-10-31. Implementation baseline: `7e90477bcd83e4de470528a2e3869d61e89b6c59`. See [first-stage acceptance](first-stage-acceptance.md), [second-stage acceptance](second-stage-acceptance.md) and [third-stage acceptance](third-stage-acceptance.md) for the tested scope and results. Broader coverage reporting, live host discovery, caching and MCP remain future work.
 
 repolife helps people and coding agents decide where to look before a change, what the change reaches, and what it leaves behind. Its reusable unit is a repository query with inspectable evidence. Existing build, test, review and agent workflows keep control of execution and policy.
@@ -180,6 +184,8 @@ Malformed/duplicate markers and user modifications block the selected plan. Inva
 | Delivered: first | Structured `why`, additive metadata, intent-routing instructions | Compatible text/JSON meanings; HEAD, history revision and base distinguished; unavailable-history reasons explicit. |
 | Delivered: second | Existing-workflow recipe and reversible integration lifecycle | Preview, repeated installation/removal, user-edit protection, guarded updates and owned-content cleanup pass independent acceptance. |
 | Delivered: third | Standard SARIF change report and executable workflow recipes | Real exports validate against the official schema; original findings and gate outcomes remain compatible; candidate/artifact handoffs pass executable checks. |
+| Delivered: reviewer follow-up | [Impact evidence sources and an optional import view](impact-provenance.md) | Default fields and file graphs retain their baseline; narrowed traversal, parent packages, unknown plugins and counted references pass 54 independent groups; full suite passes 364 tests on Python 3.11 and 3.12. |
+| Delivered: instruction handoff | [On-demand queries and evidence-aware agent instructions](skill-evidence-handoff.md) | Thirteen actual old-to-new CLI installation scenarios pass, including explicit upgrades, user-edit protection and zipapp; existing installation/mount regressions and skill format validation pass. |
 | Future | Broader capability coverage and stronger state identity | Parsing, inventory and unsupported-language gaps are machine-readable; measure reuse needs before adding caching. |
 | After observed demand | Bounded context query, caching or MCP | Measurable workflow gain exceeds integration/runtime/context overhead. |
 

@@ -1,0 +1,1684 @@
+{
+  "example_only": true,
+  "capture_date": "2026-11-01",
+  "scope": "Clean isolated checkout of repolife commit f8d4219 against its parent. No working-copy changes are included.",
+  "normalization": "Only the temporary checkout path and local interpreter path have been replaced with portable placeholders; query facts, commit identities, timings and test output are unchanged.",
+  "manifest": {
+    "repo": "<isolated-checkout>",
+    "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+    "base": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+    "worktree_changed": false,
+    "dirty_after": false,
+    "queries": [
+      {
+        "name": "triage",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "triage",
+          "--repo",
+          "<isolated-checkout>",
+          "--since",
+          "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.461,
+        "stdout_bytes": 12483,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "check",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "check",
+          "--repo",
+          "<isolated-checkout>",
+          "--since",
+          "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+          "--format",
+          "json",
+          "--fail-on",
+          "never"
+        ],
+        "exit_code": 0,
+        "seconds": 0.668,
+        "stdout_bytes": 6259,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "impact-cli",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "impact",
+          "repolife/cli.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.369,
+        "stdout_bytes": 2462,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "impact-integration",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "impact",
+          "repolife/integration.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.37,
+        "stdout_bytes": 2478,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "impact-meta",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "impact",
+          "repolife/meta.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.365,
+        "stdout_bytes": 2461,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "why-sarifview",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "why",
+          "repolife/sarifview.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.361,
+        "stdout_bytes": 1808,
+        "stderr_bytes": 0
+      },
+      {
+        "name": "test-sarif",
+        "argv": [
+          "python3.12",
+          "-W",
+          "error::ResourceWarning",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_sarif.py"
+        ],
+        "exit_code": 0,
+        "seconds": 2.435,
+        "cwd": "<isolated-checkout>",
+        "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+        "scope": "selected SARIF regressions only; not the full project suite"
+      }
+    ],
+    "triage_summary": {
+      "files": 16,
+      "lines": 2266,
+      "recently_fixed": 0,
+      "busy": 9,
+      "new": 7,
+      "no_active_owner": 0,
+      "nobody_else_can_look": 9,
+      "other_files": 9,
+      "other_lines": 878,
+      "areas": 2,
+      "ripple": {
+        "direct": 6,
+        "second": 0
+      },
+      "tests": 12
+    },
+    "check_summary": {
+      "files": 25,
+      "code_files": 16,
+      "added": 7,
+      "modified": 9,
+      "deleted": 0,
+      "lines": 2266,
+      "other_files": 9,
+      "findings": {
+        "info": 0,
+        "warn": 0,
+        "block": 0
+      },
+      "modules": 1
+    },
+    "source_status_unchanged": true
+  },
+  "queries": {
+    "triage": {
+      "execution": {
+        "name": "triage",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "triage",
+          "--repo",
+          "<isolated-checkout>",
+          "--since",
+          "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.461,
+        "stdout_bytes": 12483,
+        "stderr_bytes": 0
+      },
+      "report": {
+        "schema_version": 1,
+        "tool": {
+          "name": "repolife",
+          "version": "0.1.0"
+        },
+        "generated_at": "2026-11-01T06:32:47Z",
+        "repo": {
+          "name": "checkout"
+        },
+        "kind": "triage",
+        "meta": {
+          "schema_version": 1,
+          "tool": {
+            "name": "repolife",
+            "version": "0.1.0"
+          },
+          "generated_at": "2026-11-01T06:32:47Z",
+          "repo": {
+            "name": "checkout",
+            "root": "<isolated-checkout>"
+          },
+          "git": {
+            "available": true,
+            "reason": null,
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "history_rev": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+            "shallow": false,
+            "commits": 8
+          },
+          "change": {
+            "since": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+            "base": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "uncommitted": false
+          }
+        },
+        "change": {
+          "since": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+          "base": "7e90477bc",
+          "head": "f8d4219c3",
+          "uncommitted": false,
+          "authors": [
+            "Tianyi Zhang"
+          ]
+        },
+        "summary": {
+          "files": 16,
+          "lines": 2266,
+          "recently_fixed": 0,
+          "busy": 9,
+          "new": 7,
+          "no_active_owner": 0,
+          "nobody_else_can_look": 9,
+          "other_files": 9,
+          "other_lines": 878,
+          "areas": 2,
+          "ripple": {
+            "direct": 6,
+            "second": 0
+          },
+          "tests": 12
+        },
+        "files": [
+          {
+            "path": "repolife/cli.py",
+            "change": "modified",
+            "added": 45,
+            "deleted": 5,
+            "lines": 50,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 7,
+            "commits_year": 7,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 1,
+              "within_2": 1
+            },
+            "flags": [],
+            "rank": 1
+          },
+          {
+            "path": "repolife/templates.py",
+            "change": "modified",
+            "added": 27,
+            "deleted": 12,
+            "lines": 39,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 6,
+            "commits_year": 6,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 2,
+              "within_2": 3
+            },
+            "flags": [],
+            "rank": 2
+          },
+          {
+            "path": "repolife/report.py",
+            "change": "modified",
+            "added": 2,
+            "deleted": 1,
+            "lines": 3,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 5,
+            "commits_year": 5,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 2,
+              "within_2": 3
+            },
+            "flags": [],
+            "rank": 3
+          },
+          {
+            "path": "repolife/gitlog.py",
+            "change": "modified",
+            "added": 68,
+            "deleted": 0,
+            "lines": 68,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 4,
+            "commits_year": 4,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 6,
+              "within_2": 12
+            },
+            "flags": [],
+            "rank": 4
+          },
+          {
+            "path": "repolife/analyze.py",
+            "change": "modified",
+            "added": 7,
+            "deleted": 3,
+            "lines": 10,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 4,
+            "commits_year": 4,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 9,
+              "within_2": 11
+            },
+            "flags": [],
+            "rank": 5
+          },
+          {
+            "path": "repolife/modules.py",
+            "change": "modified",
+            "added": 3,
+            "deleted": 1,
+            "lines": 4,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 3,
+            "commits_year": 3,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 5,
+              "within_2": 8
+            },
+            "flags": [],
+            "rank": 6
+          },
+          {
+            "path": "repolife/explain.py",
+            "change": "modified",
+            "added": 130,
+            "deleted": 51,
+            "lines": 181,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 2,
+            "commits_year": 2,
+            "last_commit": "2026-10-29",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 2,
+              "within_2": 7
+            },
+            "flags": [],
+            "rank": 7
+          },
+          {
+            "path": "repolife/since.py",
+            "change": "modified",
+            "added": 5,
+            "deleted": 1,
+            "lines": 6,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 1,
+            "commits_year": 1,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 2,
+              "within_2": 3
+            },
+            "flags": [],
+            "rank": 8
+          },
+          {
+            "path": "repolife/triage.py",
+            "change": "modified",
+            "added": 2,
+            "deleted": 1,
+            "lines": 3,
+            "language": "Python",
+            "test": false,
+            "tier": "busy",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 1,
+            "commits_year": 1,
+            "last_commit": "2026-10-30",
+            "owners": [
+              {
+                "name": "Tianyi Zhang",
+                "share": 100,
+                "idle_days": 1
+              }
+            ],
+            "ownership": "owned",
+            "dependents": {
+              "direct": 1,
+              "within_2": 2
+            },
+            "flags": [],
+            "rank": 9
+          },
+          {
+            "path": "repolife/integration.py",
+            "change": "added",
+            "added": 653,
+            "deleted": 0,
+            "lines": 653,
+            "language": "Python",
+            "test": false,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 1,
+              "within_2": 2
+            },
+            "flags": [
+              "new file"
+            ],
+            "rank": 10
+          },
+          {
+            "path": "tests/test_integration.py",
+            "change": "added",
+            "added": 535,
+            "deleted": 0,
+            "lines": 535,
+            "language": "Python",
+            "test": true,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 0,
+              "within_2": 0
+            },
+            "flags": [
+              "new file",
+              "test file"
+            ],
+            "rank": 11
+          },
+          {
+            "path": "tests/test_meta.py",
+            "change": "added",
+            "added": 198,
+            "deleted": 0,
+            "lines": 198,
+            "language": "Python",
+            "test": true,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 0,
+              "within_2": 0
+            },
+            "flags": [
+              "new file",
+              "test file"
+            ],
+            "rank": 12
+          },
+          {
+            "path": "tests/test_sarif.py",
+            "change": "added",
+            "added": 188,
+            "deleted": 0,
+            "lines": 188,
+            "language": "Python",
+            "test": true,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 0,
+              "within_2": 0
+            },
+            "flags": [
+              "new file",
+              "test file"
+            ],
+            "rank": 13
+          },
+          {
+            "path": "tests/test_why.py",
+            "change": "added",
+            "added": 161,
+            "deleted": 0,
+            "lines": 161,
+            "language": "Python",
+            "test": true,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 0,
+              "within_2": 0
+            },
+            "flags": [
+              "new file",
+              "test file"
+            ],
+            "rank": 14
+          },
+          {
+            "path": "repolife/sarifview.py",
+            "change": "added",
+            "added": 110,
+            "deleted": 0,
+            "lines": 110,
+            "language": "Python",
+            "test": false,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 1,
+              "within_2": 2
+            },
+            "flags": [
+              "new file"
+            ],
+            "rank": 15
+          },
+          {
+            "path": "repolife/meta.py",
+            "change": "added",
+            "added": 57,
+            "deleted": 0,
+            "lines": 57,
+            "language": "Python",
+            "test": false,
+            "tier": "new",
+            "fixes_90": 0,
+            "fixes_year": 0,
+            "commits_active": 0,
+            "commits_year": 0,
+            "last_commit": null,
+            "owners": [],
+            "ownership": "unknown",
+            "dependents": {
+              "direct": 5,
+              "within_2": 9
+            },
+            "flags": [
+              "new file"
+            ],
+            "rank": 16
+          }
+        ],
+        "areas": [
+          {
+            "path": "repolife",
+            "files": 12,
+            "lines": 1184
+          },
+          {
+            "path": "tests",
+            "files": 4,
+            "lines": 1082
+          }
+        ],
+        "ripple": [
+          {
+            "module": "repolife",
+            "direct": 6,
+            "second": 0
+          }
+        ],
+        "ripple_examples": [
+          "repolife/__main__.py",
+          "repolife/htmlreport.py",
+          "repolife/mount.py",
+          "repolife/ownership.py",
+          "repolife/review.py",
+          "repolife/sinceview.py"
+        ],
+        "tests": {
+          "count": 12,
+          "nearest": [
+            "tests/test_htmlreport.py",
+            "tests/test_integration.py",
+            "tests/test_javascript.py",
+            "tests/test_meta.py",
+            "tests/test_modules.py",
+            "tests/test_ownership.py",
+            "tests/test_repolife.py",
+            "tests/test_review.py"
+          ]
+        },
+        "reviewers": [],
+        "nobody_else_can_look": [
+          "repolife/analyze.py",
+          "repolife/cli.py",
+          "repolife/explain.py",
+          "repolife/gitlog.py",
+          "repolife/modules.py",
+          "repolife/report.py",
+          "repolife/since.py",
+          "repolife/templates.py"
+        ],
+        "inactive_days": 180,
+        "notes": [
+          "Files are ordered by how many commits touched them in the last 90 days, then by how much this change touches. In a backtest on one large repository that predicted later fixes about as well as anything simple, and better than the size of the change alone; it says where trouble tends to be, not that this change is wrong. Fix and revert history is shown but does not reorder: it added nothing beyond activity.",
+          "Dependents, tests and owners are context: they show what a mistake could reach and who is able to look, and they did not improve the prediction. Dependents are static imports; dynamic loading and consumers outside the repository are invisible.",
+          "History is read up to the base of the change, so its own commits do not count as trouble and its authors do not count as owners."
+        ]
+      }
+    },
+    "check": {
+      "execution": {
+        "name": "check",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "check",
+          "--repo",
+          "<isolated-checkout>",
+          "--since",
+          "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+          "--format",
+          "json",
+          "--fail-on",
+          "never"
+        ],
+        "exit_code": 0,
+        "seconds": 0.668,
+        "stdout_bytes": 6259,
+        "stderr_bytes": 0
+      },
+      "report": {
+        "schema_version": 1,
+        "tool": {
+          "name": "repolife",
+          "version": "0.1.0"
+        },
+        "generated_at": "2026-11-01T06:32:47Z",
+        "repo": {
+          "name": "checkout"
+        },
+        "kind": "change-check",
+        "meta": {
+          "schema_version": 1,
+          "tool": {
+            "name": "repolife",
+            "version": "0.1.0"
+          },
+          "generated_at": "2026-11-01T06:32:47Z",
+          "repo": {
+            "name": "checkout",
+            "root": "<isolated-checkout>"
+          },
+          "git": {
+            "available": true,
+            "reason": null,
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "history_rev": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+            "shallow": false,
+            "commits": 8
+          },
+          "change": {
+            "since": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+            "base": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "uncommitted": false
+          },
+          "analysis": {
+            "structure": "complete",
+            "reason": null
+          }
+        },
+        "change": {
+          "since": "7e90477bcd83e4de470528a2e3869d61e89b6c59",
+          "base": "7e90477bc",
+          "head": "f8d4219c3",
+          "uncommitted": false
+        },
+        "summary": {
+          "files": 25,
+          "code_files": 16,
+          "added": 7,
+          "modified": 9,
+          "deleted": 0,
+          "lines": 2266,
+          "other_files": 9,
+          "findings": {
+            "info": 0,
+            "warn": 0,
+            "block": 0
+          },
+          "modules": 1
+        },
+        "changed_files": [
+          {
+            "path": "README.md",
+            "change": "modified",
+            "added": 101,
+            "deleted": 3,
+            "lines": 104,
+            "code": false
+          },
+          {
+            "path": "docs/design/first-stage-acceptance.md",
+            "change": "added",
+            "added": 83,
+            "deleted": 0,
+            "lines": 83,
+            "code": false
+          },
+          {
+            "path": "docs/design/reversible-integration.md",
+            "change": "added",
+            "added": 118,
+            "deleted": 0,
+            "lines": 118,
+            "code": false
+          },
+          {
+            "path": "docs/design/second-stage-acceptance.md",
+            "change": "added",
+            "added": 48,
+            "deleted": 0,
+            "lines": 48,
+            "code": false
+          },
+          {
+            "path": "docs/design/third-stage-acceptance.md",
+            "change": "added",
+            "added": 47,
+            "deleted": 0,
+            "lines": 47,
+            "code": false
+          },
+          {
+            "path": "docs/design/tool-interoperability.md",
+            "change": "added",
+            "added": 92,
+            "deleted": 0,
+            "lines": 92,
+            "code": false
+          },
+          {
+            "path": "docs/design/workflow-integration.md",
+            "change": "added",
+            "added": 212,
+            "deleted": 0,
+            "lines": 212,
+            "code": false
+          },
+          {
+            "path": "docs/workflow-recipes.md",
+            "change": "added",
+            "added": 135,
+            "deleted": 0,
+            "lines": 135,
+            "code": false
+          },
+          {
+            "path": "repolife/analyze.py",
+            "change": "modified",
+            "added": 7,
+            "deleted": 3,
+            "lines": 10,
+            "code": true
+          },
+          {
+            "path": "repolife/cli.py",
+            "change": "modified",
+            "added": 45,
+            "deleted": 5,
+            "lines": 50,
+            "code": true
+          },
+          {
+            "path": "repolife/explain.py",
+            "change": "modified",
+            "added": 130,
+            "deleted": 51,
+            "lines": 181,
+            "code": true
+          },
+          {
+            "path": "repolife/gitlog.py",
+            "change": "modified",
+            "added": 68,
+            "deleted": 0,
+            "lines": 68,
+            "code": true
+          },
+          {
+            "path": "repolife/integration.py",
+            "change": "added",
+            "added": 653,
+            "deleted": 0,
+            "lines": 653,
+            "code": true
+          },
+          {
+            "path": "repolife/meta.py",
+            "change": "added",
+            "added": 57,
+            "deleted": 0,
+            "lines": 57,
+            "code": true
+          },
+          {
+            "path": "repolife/modules.py",
+            "change": "modified",
+            "added": 3,
+            "deleted": 1,
+            "lines": 4,
+            "code": true
+          },
+          {
+            "path": "repolife/report.py",
+            "change": "modified",
+            "added": 2,
+            "deleted": 1,
+            "lines": 3,
+            "code": true
+          },
+          {
+            "path": "repolife/sarifview.py",
+            "change": "added",
+            "added": 110,
+            "deleted": 0,
+            "lines": 110,
+            "code": true
+          },
+          {
+            "path": "repolife/since.py",
+            "change": "modified",
+            "added": 5,
+            "deleted": 1,
+            "lines": 6,
+            "code": true
+          },
+          {
+            "path": "repolife/templates.py",
+            "change": "modified",
+            "added": 27,
+            "deleted": 12,
+            "lines": 39,
+            "code": true
+          },
+          {
+            "path": "repolife/triage.py",
+            "change": "modified",
+            "added": 2,
+            "deleted": 1,
+            "lines": 3,
+            "code": true
+          },
+          {
+            "path": "skills/repolife/SKILL.md",
+            "change": "modified",
+            "added": 27,
+            "deleted": 12,
+            "lines": 39,
+            "code": false
+          },
+          {
+            "path": "tests/test_integration.py",
+            "change": "added",
+            "added": 535,
+            "deleted": 0,
+            "lines": 535,
+            "code": true
+          },
+          {
+            "path": "tests/test_meta.py",
+            "change": "added",
+            "added": 198,
+            "deleted": 0,
+            "lines": 198,
+            "code": true
+          },
+          {
+            "path": "tests/test_sarif.py",
+            "change": "added",
+            "added": 188,
+            "deleted": 0,
+            "lines": 188,
+            "code": true
+          },
+          {
+            "path": "tests/test_why.py",
+            "change": "added",
+            "added": 161,
+            "deleted": 0,
+            "lines": 161,
+            "code": true
+          }
+        ],
+        "notes": [
+          "Dependencies are static imports between files of this repository. Dynamic loading, registries and consumers outside it are invisible, so a clean result does not mean nothing else depends on the change.",
+          "Orphans, cycles and imports are compared between the base of the change and the working tree with the same settings; modules are the same directories on both sides.",
+          "Ownership is read from history up to the base, so the author of the change does not count as having maintained what they changed."
+        ],
+        "findings": [],
+        "orphans": {
+          "new": [],
+          "resolved": []
+        },
+        "dangling_imports": [],
+        "cycles": {
+          "new": [],
+          "grown": [],
+          "resolved": []
+        },
+        "dependencies": {
+          "new": [],
+          "removed": []
+        },
+        "unowned": [],
+        "modules_touched": [
+          "repolife"
+        ]
+      }
+    },
+    "impact-cli": {
+      "execution": {
+        "name": "impact-cli",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "impact",
+          "repolife/cli.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.369,
+        "stdout_bytes": 2462,
+        "stderr_bytes": 0
+      },
+      "report": {
+        "target": "repolife/cli.py",
+        "kind": "file",
+        "meta": {
+          "schema_version": 1,
+          "tool": {
+            "name": "repolife",
+            "version": "0.1.0"
+          },
+          "generated_at": "2026-11-01T06:32:48Z",
+          "repo": {
+            "name": "checkout",
+            "root": "<isolated-checkout>"
+          },
+          "git": {
+            "available": true,
+            "reason": null,
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "history_rev": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "shallow": false,
+            "commits": 9
+          }
+        },
+        "files": 1,
+        "code": 244,
+        "module": "repolife",
+        "dependents": {
+          "direct": 1,
+          "files": 17,
+          "code": 3246,
+          "share": 51.5,
+          "by_distance": [
+            1,
+            1,
+            1,
+            7,
+            6,
+            1
+          ],
+          "modules": [
+            {
+              "module": "repolife",
+              "direct": 1,
+              "files": 12,
+              "code": 2472,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            },
+            {
+              "module": "repolife/analyzers",
+              "direct": 0,
+              "files": 4,
+              "code": 704,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            },
+            {
+              "module": "tools",
+              "direct": 0,
+              "files": 1,
+              "code": 70,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            }
+          ]
+        },
+        "tests": {
+          "files": 12,
+          "direct": 9,
+          "paths": [
+            "tests/test_htmlreport.py",
+            "tests/test_integration.py",
+            "tests/test_meta.py",
+            "tests/test_modules.py",
+            "tests/test_ownership.py",
+            "tests/test_repolife.py",
+            "tests/test_sarif.py",
+            "tests/test_triage.py",
+            "tests/test_why.py",
+            "tests/test_review.py",
+            "tests/test_since.py",
+            "tests/test_javascript.py"
+          ]
+        },
+        "depends_on": [
+          {
+            "module": "repolife",
+            "files": 15
+          }
+        ],
+        "owners": [
+          {
+            "name": "Tianyi Zhang",
+            "share": 100,
+            "idle_days": 0
+          }
+        ],
+        "contributors": 1,
+        "inactive_days": 180
+      }
+    },
+    "impact-integration": {
+      "execution": {
+        "name": "impact-integration",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "impact",
+          "repolife/integration.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.37,
+        "stdout_bytes": 2478,
+        "stderr_bytes": 0
+      },
+      "report": {
+        "target": "repolife/integration.py",
+        "kind": "file",
+        "meta": {
+          "schema_version": 1,
+          "tool": {
+            "name": "repolife",
+            "version": "0.1.0"
+          },
+          "generated_at": "2026-11-01T06:32:48Z",
+          "repo": {
+            "name": "checkout",
+            "root": "<isolated-checkout>"
+          },
+          "git": {
+            "available": true,
+            "reason": null,
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "history_rev": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "shallow": false,
+            "commits": 9
+          }
+        },
+        "files": 1,
+        "code": 519,
+        "module": "repolife",
+        "dependents": {
+          "direct": 1,
+          "files": 18,
+          "code": 3490,
+          "share": 54.5,
+          "by_distance": [
+            1,
+            1,
+            1,
+            1,
+            7,
+            6,
+            1
+          ],
+          "modules": [
+            {
+              "module": "repolife",
+              "direct": 1,
+              "files": 13,
+              "code": 2716,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            },
+            {
+              "module": "repolife/analyzers",
+              "direct": 0,
+              "files": 4,
+              "code": 704,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            },
+            {
+              "module": "tools",
+              "direct": 0,
+              "files": 1,
+              "code": 70,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            }
+          ]
+        },
+        "tests": {
+          "files": 12,
+          "direct": 1,
+          "paths": [
+            "tests/test_integration.py",
+            "tests/test_htmlreport.py",
+            "tests/test_meta.py",
+            "tests/test_modules.py",
+            "tests/test_ownership.py",
+            "tests/test_repolife.py",
+            "tests/test_sarif.py",
+            "tests/test_triage.py",
+            "tests/test_why.py",
+            "tests/test_review.py",
+            "tests/test_since.py",
+            "tests/test_javascript.py"
+          ]
+        },
+        "depends_on": [
+          {
+            "module": "repolife",
+            "files": 4
+          }
+        ],
+        "owners": [
+          {
+            "name": "Tianyi Zhang",
+            "share": 100,
+            "idle_days": 0
+          }
+        ],
+        "contributors": 1,
+        "inactive_days": 180
+      }
+    },
+    "impact-meta": {
+      "execution": {
+        "name": "impact-meta",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "impact",
+          "repolife/meta.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.365,
+        "stdout_bytes": 2461,
+        "stderr_bytes": 0
+      },
+      "report": {
+        "target": "repolife/meta.py",
+        "kind": "file",
+        "meta": {
+          "schema_version": 1,
+          "tool": {
+            "name": "repolife",
+            "version": "0.1.0"
+          },
+          "generated_at": "2026-11-01T06:32:48Z",
+          "repo": {
+            "name": "checkout",
+            "root": "<isolated-checkout>"
+          },
+          "git": {
+            "available": true,
+            "reason": null,
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "history_rev": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "shallow": false,
+            "commits": 9
+          }
+        },
+        "files": 1,
+        "code": 42,
+        "module": "repolife",
+        "dependents": {
+          "direct": 5,
+          "files": 17,
+          "code": 3448,
+          "share": 51.5,
+          "by_distance": [
+            5,
+            4,
+            1,
+            1,
+            1,
+            5
+          ],
+          "modules": [
+            {
+              "module": "repolife",
+              "direct": 5,
+              "files": 12,
+              "code": 2674,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            },
+            {
+              "module": "repolife/analyzers",
+              "direct": 0,
+              "files": 4,
+              "code": 704,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            },
+            {
+              "module": "tools",
+              "direct": 0,
+              "files": 1,
+              "code": 70,
+              "owners": [
+                {
+                  "name": "Tianyi Zhang",
+                  "share": 100,
+                  "idle_days": 0
+                }
+              ],
+              "contributors": 1,
+              "ownership": "owned"
+            }
+          ]
+        },
+        "tests": {
+          "files": 12,
+          "direct": 1,
+          "paths": [
+            "tests/test_meta.py",
+            "tests/test_htmlreport.py",
+            "tests/test_javascript.py",
+            "tests/test_modules.py",
+            "tests/test_ownership.py",
+            "tests/test_repolife.py",
+            "tests/test_review.py",
+            "tests/test_since.py",
+            "tests/test_triage.py",
+            "tests/test_why.py",
+            "tests/test_integration.py",
+            "tests/test_sarif.py"
+          ]
+        },
+        "depends_on": [
+          {
+            "module": "repolife",
+            "files": 4
+          }
+        ],
+        "owners": [
+          {
+            "name": "Tianyi Zhang",
+            "share": 100,
+            "idle_days": 0
+          }
+        ],
+        "contributors": 1,
+        "inactive_days": 180
+      }
+    },
+    "why-sarifview": {
+      "execution": {
+        "name": "why-sarifview",
+        "argv": [
+          "python3.12",
+          "-m",
+          "repolife",
+          "why",
+          "repolife/sarifview.py",
+          "--repo",
+          "<isolated-checkout>",
+          "--format",
+          "json"
+        ],
+        "exit_code": 0,
+        "seconds": 0.361,
+        "stdout_bytes": 1808,
+        "stderr_bytes": 0
+      },
+      "report": {
+        "schema_version": 1,
+        "kind": "why",
+        "meta": {
+          "schema_version": 1,
+          "tool": {
+            "name": "repolife",
+            "version": "0.1.0"
+          },
+          "generated_at": "2026-11-01T06:32:49Z",
+          "repo": {
+            "name": "checkout",
+            "root": "<isolated-checkout>"
+          },
+          "git": {
+            "available": true,
+            "reason": null,
+            "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "history_rev": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+            "shallow": false,
+            "commits": 9
+          }
+        },
+        "query": "repolife/sarifview.py",
+        "path": "repolife/sarifview.py",
+        "file": {
+          "language": "Python",
+          "kind": "code",
+          "code": 79,
+          "comment": 13,
+          "blank": 18,
+          "test": false,
+          "analyzer": "python"
+        },
+        "verdict": {
+          "status": "ACTIVE",
+          "confidence": null,
+          "reachability": "prod",
+          "entry_points": [],
+          "notes": []
+        },
+        "git": {
+          "tracked": true,
+          "last_commit": "2026-11-01",
+          "age_days": 0,
+          "first_commit": "2026-11-01",
+          "commits_active": 1,
+          "commits_year": 1,
+          "authors_year": 1,
+          "fixes_90": 0,
+          "fixes_year": 0
+        },
+        "owners": {
+          "state": "owned",
+          "inactive_days": 180,
+          "people": [
+            {
+              "name": "Tianyi Zhang",
+              "share": 100,
+              "idle_days": 0,
+              "silent": false
+            }
+          ],
+          "codeowners": null
+        },
+        "graph": {
+          "reached_via": [
+            "repolife/cli.py",
+            "repolife/sarifview.py"
+          ],
+          "dependents": [
+            "repolife/cli.py",
+            "tests/test_sarif.py"
+          ],
+          "config_refs": [],
+          "doc_refs": [],
+          "depends_on": [
+            {
+              "path": "repolife/__init__.py",
+              "status": "ACTIVE"
+            }
+          ],
+          "stranded_if_removed": []
+        },
+        "advice": null
+      }
+    },
+    "test-sarif": {
+      "execution": {
+        "name": "test-sarif",
+        "argv": [
+          "python3.12",
+          "-W",
+          "error::ResourceWarning",
+          "-m",
+          "unittest",
+          "discover",
+          "-s",
+          "tests",
+          "-p",
+          "test_sarif.py"
+        ],
+        "exit_code": 0,
+        "seconds": 2.435,
+        "cwd": "<isolated-checkout>",
+        "head": "f8d4219c3fe5a574c9560aa247a84a5cf7e76297",
+        "scope": "selected SARIF regressions only; not the full project suite"
+      },
+      "stdout": "",
+      "stderr": "...............\n----------------------------------------------------------------------\nRan 15 tests in 2.342s\n\nOK\n"
+    }
+  },
+  "diagnostics": {
+    "impact_edge_provenance": {
+      "scope": "Development diagnosis on the same clean f8d4219 checkout; uses internal graph helpers, not a supported API.",
+      "reported_raw_counts": {
+        "repolife/cli.py": {
+          "all_graph_edges_production": 17,
+          "explicit_import_edges_production": 1,
+          "explicit_paths": [
+            "repolife/__main__.py"
+          ]
+        },
+        "repolife/integration.py": {
+          "all_graph_edges_production": 18,
+          "explicit_import_edges_production": 2,
+          "explicit_paths": [
+            "repolife/__main__.py",
+            "repolife/cli.py"
+          ]
+        },
+        "repolife/meta.py": {
+          "all_graph_edges_production": 17,
+          "explicit_import_edges_production": 10,
+          "explicit_paths": [
+            "repolife/__main__.py",
+            "repolife/cli.py",
+            "repolife/explain.py",
+            "repolife/htmlreport.py",
+            "repolife/modules.py",
+            "repolife/report.py",
+            "repolife/review.py",
+            "repolife/since.py",
+            "repolife/sinceview.py",
+            "repolife/triage.py"
+          ]
+        }
+      },
+      "representative_reverse_traversal_chain_from_analyze_to_cli": [
+        "repolife/analyze.py",
+        "repolife/analyzers/__init__.py",
+        "repolife/analyzers/python.py",
+        "repolife/__main__.py",
+        "repolife/cli.py"
+      ],
+      "confirmed_inferred_edge": {
+        "from": "repolife/analyzers/python.py",
+        "to": "repolife/__main__.py",
+        "excluded_by_explicit_import_view": true,
+        "source_literal": "\"__main__.py\"",
+        "attribution_correction": "A subsequent minimal fixture isolated the path string in SPECIAL_FILES as the trigger; the bare __main__ literal in a main guard alone creates no edge. Original query objects and observed counts are unchanged."
+      }
+    }
+  }
+}

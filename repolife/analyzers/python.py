@@ -11,7 +11,7 @@ from dataclasses import dataclass, field
 from typing import Collection, Mapping
 
 from ..textrefs import DOTTED_FULL, PYPATH, PathIndex
-from . import Analyzer, LanguageResult, Repo
+from . import Analyzer, LanguageResult, Repo, note
 
 # Files that something outside the repository runs or imports by convention.
 SPECIAL_FILES = frozenset({"__main__.py", "setup.py", "manage.py", "wsgi.py", "asgi.py", "noxfile.py", "fabfile.py", "conf.py"})
@@ -230,21 +230,38 @@ class PythonAnalyzer(Analyzer):
         paths = PathIndex(pyset)
         edges: dict[str, set[str]] = {}
         indirect: dict[str, set[str]] = {}
+        provenance: dict[str, dict[str, str]] = {}
         for path, info in infos.items():
             found: set[str] = set()
             imported: set[str] = set()  # what the import statements name, as opposed to what they run on the way
+            prov: dict[str, str] = {}  # target -> strongest kind of evidence; see analyzers.KINDS
             for imp in info.imports:
                 ran, said = targets(info, imp)
                 found |= ran
                 imported |= said
-            for ref in info.dotted:
-                found |= resolve_reference(ref)
+                for t in said:
+                    note(prov, t, "import")
+                for t in ran - said:
+                    note(prov, t, "package")
+            for ref in info.dotted:  # a dotted name in a string, including the argument of a literal import_module() call
+                hit = resolve_reference(ref)
+                found |= hit
+                for t in hit:
+                    note(prov, t, "string")
             for token in info.paths:
-                found |= paths.resolve(token)
-            found |= dynamic_targets(info)
+                hit = paths.resolve(token)
+                found |= hit
+                for t in hit:
+                    note(prov, t, "string")
+            dyn = dynamic_targets(info)
+            found |= dyn
+            for t in dyn:
+                note(prov, t, "dynamic")
             found.discard(path)
+            prov.pop(path, None)
             edges[path] = found
             indirect[path] = found - imported
+            provenance[path] = prov
 
         tests = {p for p in pyset if is_test_path(p)}
         roots: dict[str, list[str]] = {}
@@ -267,4 +284,5 @@ class PythonAnalyzer(Analyzer):
             unparsed=unparsed,
             comment_lines={p: i.doc_lines for p, i in infos.items()},
             resolve_reference=resolve_reference,
+            provenance=provenance,
         )

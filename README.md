@@ -34,8 +34,8 @@ takes it out again, and every JSON object says which commit and which history it
 - **Counts the review the changes ask for.** How much code changed lately, where, by whom, and whether anyone who knows
   that code is still around to look at it.
 - **Shows the structure.** `repolife graph` rolls imports up into modules, finds the cycles and the few
-  dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests to run and who
-  maintains the affected code. Static imports only, no model in the loop.
+  dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests that reach it and who
+  maintains the affected code, and says which kind of evidence each step rests on. Static analysis only, no model in the loop.
 - **Triages a change.** `repolife triage --since main` ranks the files of a branch, or of uncommitted work, by recent
   activity, and shows what outside the change imports them, which tests reach them and who is able to look. Its order
   was backtested, and what did not help was left out of the order.
@@ -55,7 +55,7 @@ repolife scan . --format json   # machine-readable
 repolife scan . --format html --out report.html   # one page to open or share
 repolife why path/to/file.py    # the evidence behind one verdict
 repolife graph .                # how modules depend on each other, and the cycles
-repolife impact path/to/file.py # what a change can reach, the tests to run, who to tell
+repolife impact path/to/file.py # what a change can reach, the tests that reach it, who to tell
 repolife triage --since main    # the files of a change to look at first, and who can look
 repolife check --since main     # what a change did to the structure, with an exit code for CI
 ```
@@ -90,6 +90,13 @@ conflicts (exit 1, with the plan); `--dry-run` shows the same plan without writi
 data; single files are replaced atomically and an ordinary failure is rolled back, which is not a cross-file
 transaction. Installing files does not prove a running host has discovered them: start a new session in the
 project afterwards. Nothing else is touched: no CI, hooks, configuration file, `.gitignore` line or network.
+
+Updating repolife itself does not rewrite installed instructions. For receipt-managed integrations,
+`repolife integration status .` reports `installed-outdated` when the bundled instructions have changed.
+Preview with `repolife integration update . --dry-run`, then run `repolife integration update .` to refresh
+unchanged managed files and blocks. User-modified content remains a conflict; review and reconcile it yourself.
+The updated skill explains impact's evidence sources and `--edges imports`, while candidate tests remain
+subject to the project's runner and required checks.
 
 The older `repolife init` still works as before and leaves no receipt, so `integration` never claims or removes
 its files:
@@ -309,9 +316,10 @@ irredundant.
 $ repolife impact util/helpers.py
 Changing util/helpers.py  (1 file, 2 code lines) can affect:
 
-- **3 code files** in **3 modules** (37.5% of the code), 1 of them importing it directly
-- **1 test file**, 0 importing it directly
-- code files by number of imports away: 1: 1, 2: 2
+- **3 code files** in **3 modules** (37.5% of the code), 1 of them directly (one followed edge away)
+- **1 test file** reaching it (candidates to run, not runs), 0 directly
+- code files by number of followed edges away: 1: 1, 2: 2
+- edges followed, any number of steps: recognized dependency syntax, package files, and 0 references found in strings, dynamic loading or unclassified evidence; syntax and package files alone reach 3 code files and 1 test file
 
 | Affected module | Files | Direct |
 |---|---:|---:|
@@ -322,10 +330,36 @@ Changing util/helpers.py  (1 file, 2 code lines) can affect:
 Tests that reach it, nearest first: `tests/test_engine.py`
 ```
 
-`impact` takes a file, a directory or a dotted package name and follows imports backwards, through cycles
-without looping. With git history it also lists who maintains the affected code, which is who to tell or
-ask for a review. `--hops 1` keeps only direct importers. A package `__init__` is affected by any import
+`impact` takes a file, a directory or a dotted package name and walks the dependency graph backwards, through
+cycles without looping. With git history it also lists who maintains the affected code, which is who to tell or
+ask for a review. `--hops 1` keeps only direct dependents. A package `__init__` is affected by any import
 beneath it, because Python runs it.
+
+Every edge carries the kind of evidence it rests on, strongest first: `import` (recognized literal dependency
+syntax names the file: a Python import statement; for JavaScript and TypeScript an `import`, `export ... from`,
+`require()`, a literal `import()`, `new URL(...)` or a reference path), `package` (a parent `__init__.py` that
+Python runs for such a statement), `dynamic` (a supported computed import, glob or `require.context` pattern
+expands to the file), `string` (a dotted name or path in an ordinary string resolves to it) and `unknown` (an
+analyzer from before this field reported the edge without saying why). When one pair has both an import and a
+string, it is an import. A Python `import_module("pkg.mod")` with a literal argument counts as a `string`,
+because the analyzer does not look at the call around the literal; a JavaScript `import("./x")` with a literal
+is recognized syntax. The names describe evidence, not what runs.
+
+By default `impact` follows every kind, as it always has, and says so. The `edges` block of the JSON carries
+`policy`, `hops`, the `kinds` followed, `followed` and `excluded` counted by kind, `references` (the total and a
+capped list of the string, dynamic and unknown edges met, with the cap stated), `unclassified` (such edges and
+the analyzers that gave no provenance) and, under the default only, `imports_only`: what the narrower policy
+would reach from the same seeds under the same hop limit. The text has one line for the same facts.
+`--edges imports` follows `import` and `package` edges only; the string, dynamic and unknown edges met at the
+frontier are counted and listed, not followed, and *direct* means one followed edge away under either policy. The
+line names the hop limit it ran under, `at most N steps` or `any number of steps`.
+Counts are per source/target pair met while expanding the walk, so they describe the frontier the walk saw, not
+every such edge in the repository, and an excluded edge is never expanded. `depends_on` is the other direction,
+the dependencies the target itself names, and never the result of the reverse walk: under `--edges imports`
+only `import` and `package` edges count; under the default it is the set it always was, which for Python is
+what import statements name and for JavaScript everything the scanner resolved, path strings and globs included.
+Tests are listed because they reach the target; nothing here records what ran. Neither policy shows that a file
+outside the result is unaffected.
 
 ## Triage a change
 
@@ -466,9 +500,12 @@ size limit, anything excluded) are not part of either side.
 repolife scan . --format html --out report.html
 ```
 
-One file, about 250 KB for a repository of two thousand files: styles, script and data are inside it, nothing is
-fetched, and it is rendered on the server, so it reads without scripts and prints. The script only adds sorting,
-filtering, highlighting in the module graph and the impact explorer.
+One self-contained file: styles, script and data are inside it, nothing is fetched, and Python renders all
+sections, so it reads without scripts and prints. With scripts enabled, a grouped sidebar opens one focused
+view at a time. Use **⌘K / Ctrl+K** to find a view, analyzed file or directory; choosing a path opens its impact
+analysis. Escape closes quick navigation, and the arrow keys and Enter select a result. Section links and
+browser Back/Forward work, and switching views preserves the current query and filters. The repository and
+snapshot revision remain visible; the report is a captured analysis, not a live workspace connection.
 
 | Section | What it is for |
 |---|---|
@@ -476,12 +513,15 @@ filtering, highlighting in the module graph and the impact explorer.
 | Where to look first | the top of three longer tables: probably unused, nobody active maintains, dependencies to untangle |
 | Directories | size, status mix and owners per directory; click a heading to sort |
 | Modules | the dependency graph (users on the left, what they build on to the right, cuts that break a cycle in red; click a module to highlight what it uses and what uses it), the cycles with their cut lists, and every module in a table |
-| Impact | type any file or directory: the code that imports it directly or through others, the tests that reach it, and who owns the affected files |
+| Impact | type an analyzed file or directory; compare all relationships with recognized imports and Python parent packages, limit the number of steps, inspect inferred evidence and candidate tests |
 | Review load | a bar per area for the lines changed, split by an owner, someone else and bots; who the changes land on; the largest changes |
 | Ownership, hotspots, cleanup | the same tables as the Markdown report, with filters on the long ones |
 
-The impact explorer walks the import graph embedded in the page, and the tests check that it gives the same
-numbers as `repolife impact` for every file and directory of this repository. Two differences: it names the top
+The impact explorer walks the relationship graph embedded in the page. Its evidence selector corresponds to
+`repolife impact --edges all|imports`; its step limit corresponds to `--hops`. Tests compare both policies with
+the Python implementation for every analyzed file and directory of this repository, including the evidence
+counts and bounded reference examples. Inferred links are disclosed rather than presented as confirmed runtime
+dependencies, and candidate test paths do not record test execution. Two differences: it names the top
 owner of each affected file rather than a rolled-up share, and it is left out (with a note) past 20,000 analysed
 files, where `repolife impact` still works. Status colours are four hues chosen to stay apart under common colour
 blindness, and every one is repeated in text. Names are escaped everywhere, and emails never reach the page.
@@ -597,6 +637,10 @@ Two reference implementations, written against the same interface: `repolife/ana
   everything (a busy `__init__.py` or `index.ts`) makes the modules importing through it look more tangled than
   their real call graph, and registries, dependency injection and dynamic loading leave no edge, so a missing
   dependency is not proof there is none.
+- A dotted name or path in a string is an edge of kind `string`, and `impact` follows it by default. A tool that
+  names files in strings links itself to them: repolife's own Python analyzer holds the string `__main__.py`, so
+  on this repository `impact repolife/cli.py` reaches the analyzers from the CLI by default and `--edges imports`
+  does not. The bare `if __name__ == "__main__"` idiom makes no edge.
 - Review load counts lines changed, not effort: a generated file that is not excluded, or a mechanical rename of one
   symbol, weighs as much as careful work. It cannot see who reviewed, and it follows neither renames nor branches
   that never reached the history it reads.
