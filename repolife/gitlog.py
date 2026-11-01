@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import fnmatch
+import os
 import re
 import subprocess
 from collections.abc import Iterator, Sequence
@@ -47,6 +48,21 @@ class Activity:
     credit: dict[str, dict[str, float]]  # path -> identity -> commits, recent ones weighing more
 
 
+REASONS = ("not-a-repository", "no-commits", "git-not-found", "git-error", "not-requested")
+
+
+@dataclass(frozen=True)
+class GitState:
+    """What git could say about the analysed tree, probed apart from the history read: `load` returning None only
+    says that no usable history came back, and a caller deciding what to trust needs to know why. `head` is HEAD
+    resolved on its own; `Activity.head` is the revision history was read up to, which for a change is its base."""
+
+    available: bool  # usable history was read
+    reason: str | None  # None when available, else one of REASONS
+    head: str | None  # full object id of HEAD; None when nothing resolves to a commit
+    history_rev: str | None  # full object id of the commit history was read up to; None when unavailable or not requested
+
+
 @dataclass
 class Change:
     """One commit as review work: what it touched and how many lines moved."""
@@ -65,6 +81,58 @@ def _git_line(root: Path, *args: str) -> str | None:
     except (OSError, subprocess.SubprocessError):
         return None
     return res.stdout.strip() if res.returncode == 0 else None
+
+
+def commit_id(root: Path, rev: str) -> str | None:
+    """The full object id of `rev` as a commit, None when it does not resolve to one (no commits yet, unknown name,
+    not a repository, no git)."""
+    return _git_line(root, "rev-parse", "--verify", "--quiet", f"{rev}^{{commit}}")
+
+
+def _probe(root: Path | None, *args: str) -> tuple[int | None, str, str]:
+    """(exit code, stdout, stderr) of one git command, in English; the code is None when git could not start."""
+    cmd = ["git", *(("-C", str(root)) if root else ()), *args]
+    try:
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30, env={**os.environ, "LC_ALL": "C"})
+    except OSError:
+        return None, "", ""
+    except subprocess.SubprocessError as exc:
+        return -1, "", str(exc)
+    return res.returncode, res.stdout.strip(), res.stderr.strip()
+
+
+_NOT_A_REPOSITORY = re.compile(r"not a git repository", re.I)
+
+
+def unavailable_reason(root: Path) -> str:
+    """Why `load` returned None, one probe at a time. Only the answers git gives for "no repository here" and "HEAD
+    is unborn" get those names; every other failure, including a `rev-parse` that fails inside a valid repository,
+    is a `git-error`, so a read that broke is never reported as an empty repository."""
+    code, _, _ = _probe(None, "--version")
+    if code is None:
+        return "git-not-found"
+    if code != 0:
+        return "git-error"
+    code, out, err = _probe(root, "rev-parse", "--is-inside-work-tree")
+    if (code == 0 and out == "false") or (code == 128 and _NOT_A_REPOSITORY.search(err)):
+        return "not-a-repository"
+    if code != 0 or out != "true":
+        return "git-error"
+    code, _, _ = _probe(root, "rev-parse", "--verify", "--quiet", "HEAD^{commit}")
+    if code == 1:  # `--verify --quiet` exits 1 for exactly one thing: the name does not resolve, here an unborn HEAD
+        return "no-commits"
+    return "git-error"
+
+
+def describe(root: Path, rev: str, activity: Activity | None, requested: bool = True) -> GitState:
+    """The GitState behind an analysis: HEAD is resolved on its own, `rev` is the history revision that was asked
+    for, and a missing history gets its reason. `requested=False` is for a result that read no history at all."""
+    head = commit_id(root, "HEAD")
+    if not requested:
+        return GitState(False, "not-requested", head, None)
+    if activity is None:
+        return GitState(False, unavailable_reason(root), head, None)
+    return GitState(True, None, head, commit_id(root, rev))
 
 
 def identity(name: str, email: str) -> str:

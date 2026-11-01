@@ -6,7 +6,7 @@ from collections import Counter, defaultdict
 from dataclasses import asdict
 from datetime import datetime, timezone
 
-from . import __version__, review
+from . import __version__, meta, review
 from .analyze import Analysis
 from .model import SCHEMA_VERSION, STATUSES
 from .ownership import LISTED_OWNERS, UNKNOWN, UNOWNED, bus_factor, owner_rows, rollup
@@ -152,6 +152,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
         "tool": {"name": "repolife", "version": __version__},
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": a.root.name},
+        "meta": meta.of(a),
         "git": {
             "available": a.activity is not None,
             "head": a.activity.head if a.activity else None,

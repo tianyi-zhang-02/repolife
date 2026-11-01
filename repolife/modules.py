@@ -12,7 +12,7 @@ from collections import Counter, defaultdict, deque
 from collections.abc import Iterable, Mapping
 from datetime import datetime, timezone
 
-from . import __version__
+from . import __version__, meta
 from .analyze import Analysis
 from .explain import TargetError, resolve_target
 from .model import SCHEMA_VERSION, STATUSES
@@ -180,6 +180,7 @@ def _header(a: Analysis, kind: str) -> dict:
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": a.root.name},
         "kind": kind,
+        "meta": meta.of(a),
     }
 
 
@@ -382,6 +383,7 @@ def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPA
     out = {
         "target": label,
         "kind": kind,
+        "meta": meta.of(a),
         "files": len(seeds),
         "code": sum(a.records[p].code for p in seeds),
         "module": module_of.get(seeds[0]) if kind == "file" else None,

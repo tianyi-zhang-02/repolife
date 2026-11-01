@@ -1,14 +1,24 @@
-"""`repolife why <file>`: the evidence behind a file's verdict, for agents and humans verifying a candidate."""
+"""`repolife why <file>`: the evidence behind a file's verdict, for agents and humans verifying a candidate.
+`facts` collects it as data, `explain` renders that data as text and `why_json` wraps it for `--format json`, so
+the two outputs cannot disagree."""
 
 from __future__ import annotations
 
+from . import meta
 from .analyze import Analysis
+from .model import SCHEMA_VERSION
 
 _REACH_TEXT = {
     "prod": "reachable from a production entry point",
     "test": "reachable only from tests",
     "none": "NOT reachable from any entry point, test or config reference",
 }
+
+ORPHAN_ADVICE = (
+    "Before deleting: search the repo for the file's module name and public symbols (dynamic lookups, "
+    "registries, external consumers), and run the test suite. If the file is intentionally public, add it "
+    "to `keep` in .repolife.toml."
+)
 
 
 class TargetError(LookupError):
@@ -42,61 +52,130 @@ def _fmt(items, empty="none", cap=12) -> str:
     return shown + (f" (+{len(items) - cap} more)" if len(items) > cap else "")
 
 
-def explain(a: Analysis, target: str) -> str:
+def facts(a: Analysis, target: str) -> dict:
+    """What is known about one file, as data: the verdict and its reasons, the file's history, who maintains it
+    and its place in the import graph. `git`, `owners` and `graph` are None when the analysis had nothing to say
+    (no history, no ownership, no analyzer for the language), and `share` is a percentage as the text shows it."""
     path = resolve_target(a, target)
     rec = a.records[path]
     g = a.graph
-    out = [f"{path}  ({rec.language}, {rec.code} code lines)"]
-
-    if rec.status:
-        verdict = rec.status + (f" (confidence {rec.confidence})" if rec.confidence else "")
-        out.append(f"status:        {verdict}")
-    if rec.analyzer is None:
-        out.append(f"reachability:  not analysed (no analyzer for {rec.language})")
-    else:
-        out.append(f"reachability:  {_REACH_TEXT[rec.reachability]}")
-    if rec.roots:
-        out.append(f"entry point:   {'; '.join(rec.roots)}")
-    if rec.is_test:
-        out.append("kind:          test file")
-
-    if rec.tracked:
-        out.append(
-            f"git:           last commit {rec.last_commit} ({rec.age_days}d ago), first {rec.first_commit}; "
-            f"{rec.commits_year} commits / {rec.authors_year} authors in the last 365d"
-        )
-    elif a.activity is not None:
-        out.append("git:           no history for this file (new or untracked)")
-
+    out: dict = {
+        "query": target,
+        "path": path,
+        "file": {
+            "language": rec.language,
+            "kind": rec.kind,
+            "code": rec.code,
+            "comment": rec.comment,
+            "blank": rec.blank,
+            "test": rec.is_test,
+            "analyzer": rec.analyzer,
+        },
+        "verdict": {
+            "status": rec.status,
+            "confidence": rec.confidence,
+            "reachability": rec.reachability,
+            "entry_points": list(rec.roots),
+            "notes": list(rec.notes),
+        },
+        "git": None,
+        "owners": None,
+        "graph": None,
+        "advice": ORPHAN_ADVICE if rec.status == "ORPHAN" else None,
+    }
+    if a.activity is not None:
+        out["git"] = {
+            "tracked": rec.tracked,
+            "last_commit": rec.last_commit,
+            "age_days": rec.age_days,
+            "first_commit": rec.first_commit,
+            "commits_active": rec.commits_active,
+            "commits_year": rec.commits_year,
+            "authors_year": rec.authors_year,
+            "fixes_90": rec.fixes_90,
+            "fixes_year": rec.fixes_year,
+        }
     found = a.ownership.files.get(path) if a.ownership else None
     if found is not None:
-        gone = a.ownership.inactive_days
-        who = ", ".join(f"{o.name} {round(100 * o.share)}%" + (f" (silent {o.idle_days}d)" if o.idle_days > gone else "") for o in a.ownership.owners(found.shares))
-        out.append(f"owners:        {who or 'none (no usable history)'}" + ("; NO ACTIVE OWNER" if found.state == "no-active-owner" else ""))
-        if found.declared is not None:
-            check = {True: "includes a person who maintains it", False: "none of them maintains it", None: "cannot be compared with the commit authors"}[found.declared_match]
-            out.append(f"CODEOWNERS:    {' '.join(found.declared) or 'no declared owner'}" + (f" ({check})" if found.declared else ""))
-
+        own = a.ownership
+        out["owners"] = {
+            "state": found.state,
+            "inactive_days": own.inactive_days,
+            "people": [
+                {"name": o.name, "share": round(100 * o.share), "idle_days": o.idle_days, "silent": o.idle_days > own.inactive_days}
+                for o in own.owners(found.shares)
+            ],
+            "codeowners": None if found.declared is None else {"declared": list(found.declared), "match": found.declared_match},
+        }
     if rec.analyzer:
-        route = g.chain(path)
-        if len(route) > 1:
-            out.append("reached via:   " + " -> ".join(route))
-        out.append(f"depended on by: {_fmt(g.inbound.get(path, ()))}")
-        out.append(f"named in config/scripts: {_fmt(g.config_refs.get(path, ()))}")
-        out.append(f"mentioned in docs: {_fmt(g.doc_refs.get(path, ()))}")
-        deps = sorted(g.edges.get(path, ()))
-        out.append("depends on:    " + _fmt(f"{d} [{a.records[d].status}]" if d in a.records and a.records[d].status else d for d in deps))
-        stranded = g.stranded_if_removed(path)
-        if stranded:
-            out.append(f"deleting it would also strand: {_fmt(stranded)}")
+        out["graph"] = {
+            "reached_via": g.chain(path),
+            "dependents": sorted(g.inbound.get(path, ())),
+            "config_refs": sorted(g.config_refs.get(path, ())),
+            "doc_refs": sorted(g.doc_refs.get(path, ())),
+            "depends_on": [{"path": d, "status": a.records[d].status if d in a.records else None} for d in sorted(g.edges.get(path, ()))],
+            "stranded_if_removed": g.stranded_if_removed(path),
+        }
+    return out
 
-    for note in rec.notes:
+
+def render(f: dict) -> str:
+    """The text of `repolife why`, from `facts`."""
+    file, verdict = f["file"], f["verdict"]
+    out = [f"{f['path']}  ({file['language']}, {file['code']} code lines)"]
+
+    if verdict["status"]:
+        out.append("status:        " + verdict["status"] + (f" (confidence {verdict['confidence']})" if verdict["confidence"] else ""))
+    if file["analyzer"] is None:
+        out.append(f"reachability:  not analysed (no analyzer for {file['language']})")
+    else:
+        out.append(f"reachability:  {_REACH_TEXT[verdict['reachability']]}")
+    if verdict["entry_points"]:
+        out.append("entry point:   " + "; ".join(verdict["entry_points"]))
+    if file["test"]:
+        out.append("kind:          test file")
+
+    git = f["git"]
+    if git is not None:
+        if git["tracked"]:
+            out.append(
+                f"git:           last commit {git['last_commit']} ({git['age_days']}d ago), first {git['first_commit']}; "
+                f"{git['commits_year']} commits / {git['authors_year']} authors in the last 365d"
+            )
+        else:
+            out.append("git:           no history for this file (new or untracked)")
+
+    owners = f["owners"]
+    if owners is not None:
+        who = ", ".join(f"{p['name']} {p['share']}%" + (f" (silent {p['idle_days']}d)" if p["silent"] else "") for p in owners["people"])
+        out.append(f"owners:        {who or 'none (no usable history)'}" + ("; NO ACTIVE OWNER" if owners["state"] == "no-active-owner" else ""))
+        declared = owners["codeowners"]
+        if declared is not None:
+            check = {True: "includes a person who maintains it", False: "none of them maintains it", None: "cannot be compared with the commit authors"}[declared["match"]]
+            out.append(f"CODEOWNERS:    {' '.join(declared['declared']) or 'no declared owner'}" + (f" ({check})" if declared["declared"] else ""))
+
+    graph = f["graph"]
+    if graph is not None:
+        if len(graph["reached_via"]) > 1:
+            out.append("reached via:   " + " -> ".join(graph["reached_via"]))
+        out.append(f"depended on by: {_fmt(graph['dependents'])}")
+        out.append(f"named in config/scripts: {_fmt(graph['config_refs'])}")
+        out.append(f"mentioned in docs: {_fmt(graph['doc_refs'])}")
+        out.append("depends on:    " + _fmt(f"{d['path']} [{d['status']}]" if d["status"] else d["path"] for d in graph["depends_on"]))
+        if graph["stranded_if_removed"]:
+            out.append(f"deleting it would also strand: {_fmt(graph['stranded_if_removed'])}")
+
+    for note in verdict["notes"]:
         out.append(f"note:          {note}")
-    if rec.status == "ORPHAN":
-        out += [
-            "",
-            "Before deleting: search the repo for the file's module name and public symbols (dynamic lookups, "
-            "registries, external consumers), and run the test suite. If the file is intentionally public, add it "
-            "to `keep` in .repolife.toml.",
-        ]
+    if f["advice"]:
+        out += ["", f["advice"]]
     return "\n".join(out)
+
+
+def explain(a: Analysis, target: str) -> str:
+    return render(facts(a, target))
+
+
+def why_json(a: Analysis, target: str) -> dict:
+    """The `--format json` result for one target: the facts the text shows, plus the metadata block."""
+    return {"schema_version": SCHEMA_VERSION, "kind": "why", "meta": meta.of(a), **facts(a, target)}

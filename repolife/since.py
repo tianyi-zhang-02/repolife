@@ -19,7 +19,7 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__, inventory, modules
+from . import __version__, gitlog, inventory, meta, modules
 from .analyze import HINT_DIRS, Analysis, analyze
 from .config import Config
 from .model import SCHEMA_VERSION
@@ -313,12 +313,15 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
         lang = inventory.language_of(path)
         files.append({"path": path, "change": state, "added": added, "deleted": deleted, "lines": added + deleted, "code": bool(lang is not None and lang.kind == "code")})
     code = [f for f in files if f["code"]]
+    change_ids = {"since": since, "base": base, "head": head, "uncommitted": dirty}
     result: dict = {
         "schema_version": SCHEMA_VERSION,
         "tool": {"name": "repolife", "version": __version__},
         "generated_at": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": root.name},
         "kind": "change-check",
+        # Until the trees are compared below, the metadata says so: no history was read and no structure was checked.
+        "meta": meta.block(now, root, gitlog.GitState(False, "not-requested", head, None), change=change_ids, analysis={"structure": "skipped", "reason": "no-code-changes"}),
         "change": {"since": since, "base": base[:9], "head": head[:9], "uncommitted": dirty},
         "summary": {
             "files": len(files),
@@ -341,6 +344,7 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
         extract_tree(root, base, prefix, Path(scratch), skip)
         base_a = analyze(Path(scratch), quiet, now=now)
     head_a = analyze(root, quiet, now=now, rev=base)
+    result["meta"] = meta.of(head_a, change=change_ids, analysis={"structure": "complete", "reason": None})
     result.update(compare(base_a, head_a, {f["path"]: (f["added"], f["deleted"], f["change"]) for f in files}))
     result["summary"]["findings"] = {s: sum(f["severity"] == s for f in result["findings"]) for s in SEVERITIES}
     result["summary"]["modules"] = len(result["modules_touched"])

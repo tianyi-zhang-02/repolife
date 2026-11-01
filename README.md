@@ -15,10 +15,14 @@ It is built for coding agents (stable JSON, an agent skill, a `why` command to v
 and is just as readable by a person. When a codebase outgrows what anyone can review, it answers
 where the volume is, what is unused, and which corners nobody looks after. Three more commands read the same
 import graph and history: `graph` shows how the modules depend on each other, `impact` what a change can reach, and
-`triage` which files of a change deserve a human first.
+`triage` which files of a change deserve a human first. It fits into what a team already runs rather than asking for
+a new place: `check` writes SARIF for tools that read it, `integration` installs the agent skill with a receipt and
+takes it out again, and every JSON object says which commit and which history it describes.
 
 - **Zero dependencies.** Pure Python 3.11+ standard library.
-- **Mounts into any repo** in one command, existing or brand new: `repolife init`.
+- **Mounts into any repo, and unmounts again.** `repolife integration install --agent claude` writes the project skill
+  with a receipt; `status`, `update` and `remove` act only on what the receipt records, so nothing you wrote is ever
+  overwritten or deleted. Works in an empty or non-git project too.
 - **Python and JavaScript/TypeScript** (including `.vue`, `.svelte`, `.astro`, `.mdx`) get a reachability verdict.
 - **Config-aware.** Understands that code is wired by name, not only by `import`: hydra
   `_target_`, console-script entry points, `python scripts/x.py` in CI, registries filled by
@@ -53,6 +57,7 @@ repolife why path/to/file.py    # the evidence behind one verdict
 repolife graph .                # how modules depend on each other, and the cycles
 repolife impact path/to/file.py # what a change can reach, the tests to run, who to tell
 repolife triage --since main    # the files of a change to look at first, and who can look
+repolife check --since main     # what a change did to the structure, with an exit code for CI
 ```
 
 No install at all: build a single 300 KB file and drop it into any repository.
@@ -64,6 +69,30 @@ python3 repolife.pyz scan /path/to/any/repo
 ```
 
 ## Mount it into a repository
+
+```bash
+repolife integration install . --agent claude --agent codex --dry-run   # show the plan, write nothing
+repolife integration install . --agent claude --agent codex             # project skills for Claude Code and Codex
+repolife integration install . --agent agents                           # one marked block in AGENTS.md
+repolife integration status .                                           # what is installed and whether it changed
+repolife integration update .                                           # refresh files that are still as installed
+repolife integration remove .                                           # take everything out again
+```
+
+`integration` keeps a receipt, `.repolife-integration.json`, at the project root: which profiles are installed
+(`claude` writes `.claude/skills/repolife/SKILL.md`, `codex` writes `.agents/skills/repolife/SKILL.md`, `agents`
+inserts one marked block into `AGENTS.md`), the hash of every file it wrote, the exact bytes it inserted into
+`AGENTS.md` and the directories it created. Only what the receipt records is ever updated or removed. A file that
+already exists is a conflict, even when it is byte-identical to the template; a recorded file you edited is yours
+and is left alone; text you add outside the block survives `update` and `remove`; a shared file that was there
+before is never deleted. Every command plans and checks all its targets first and writes nothing when any of them
+conflicts (exit 1, with the plan); `--dry-run` shows the same plan without writing; `--format json` gives it as
+data; single files are replaced atomically and an ordinary failure is rolled back, which is not a cross-file
+transaction. Installing files does not prove a running host has discovered them: start a new session in the
+project afterwards. Nothing else is touched: no CI, hooks, configuration file, `.gitignore` line or network.
+
+The older `repolife init` still works as before and leaves no receipt, so `integration` never claims or removes
+its files:
 
 ```bash
 repolife init                   # .repolife.toml, .claude/skills/repolife/SKILL.md, AGENTS.md block, .gitignore line
@@ -367,6 +396,7 @@ does not make a file depend on the package `a`, and dynamic loading and consumer
 repolife check --since main                  # a branch, judged from where it parted from main, plus uncommitted work
 repolife check                               # only uncommitted work
 repolife check --since main --fail-on block  # exit 1 when something is certain to break
+repolife check --since main --format sarif --out check.sarif   # the same findings for tools that read SARIF
 ```
 
 `scan` describes a repository as it is; `check` says what a change did to it. It reads the base of the change straight
@@ -405,6 +435,24 @@ $ repolife check --since main
 `--fail-on block` exits 1 for `dangling-import` only; `--fail-on warn` also for the warnings; the default never fails.
 `--format json` gives the same findings with their evidence (`orphans`, `cycles`, `dependencies`, `dangling_imports`,
 `unowned`, `changed_files`; `kind` is `change-check`) for an agent to act on.
+
+`--format sarif` writes the same check as a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+log, for editors and services that already read that format. It is a rendering, not a second analysis: one finding
+becomes one result, in the same order, under a fixed rule per kind (`repolife/dangling-import`, `repolife/new-orphan`,
+…); `block`, `warn` and `info` become `error`, `warning` and `note`, and the observations (`new-dependency`,
+`orphan-resolved`, `cycle-resolved`) are `kind: informational` with `level: none` rather than failures. The whole
+finding, `files` and `needs_human` included, sits in the result's `properties["repolife/finding"]`, and the check's
+`meta`, `change`, `summary` and `notes` in the run's `properties["repolife/check"]`, so the identity of the comparison
+travels with the file. The evidence is file-level, so a location names a file and never a line: the first path of a
+finding that still exists and stays inside the analysed root is the primary location, the others are related
+locations, and a finding with no usable path has no location at all rather than an invented one. Paths are URI-encoded
+relative to `originalUriBaseIds.REPOLIFE_ROOT`, the directory that was analysed. Nothing is uploaded or configured, and
+no fingerprints are generated. Two limits to know before wiring it anywhere: a consumer such as GitHub code scanning
+shows only results that have a location, so grouped or repository-level findings stay in the file rather than inline;
+and a check compares one change with one base, so feeding it into a persistent alert category can make an old
+repository-wide problem look fixed when a later change simply did not touch it. `--fail-on` keeps its meaning: with
+`block` the exit code is 1 and the document is still complete. Copyable shell and Python recipes for CI artifacts, test
+selection and gates are in [docs/workflow-recipes.md](docs/workflow-recipes.md).
 
 Only what static imports show is compared, so a clean result is not proof that nothing else depends on the change, and
 a `block` is certain only for importers the change left untouched. Both sides are cut into modules the same way, so a
@@ -467,7 +515,57 @@ without git), `review` (`window`, `totals` with `bulk`, `unowned`, `areas`, `aut
 `caveats`, and with `--full` a per-file `files` table.
 
 `repolife graph --format json` and `repolife impact --format json` print their own objects (`kind` is `module-graph`,
-`file-graph`, or has `target` for an impact) with the same `schema_version`.
+`file-graph`, or has `target` for an impact) with the same `schema_version`. `repolife why <path> --format json`
+prints the same facts the text shows, as data: `file`, `verdict` (`status`, `confidence`, `reachability`,
+`entry_points`, `notes`), `git`, `owners`, `graph` (`reached_via`, `dependents`, `config_refs`, `doc_refs`,
+`depends_on`, `stranded_if_removed`) and `advice`; `git`, `owners` and `graph` are `null` when the analysis had
+nothing to say.
+
+Every JSON object also carries a `meta` block with the same names everywhere: `tool`, `generated_at`, `repo`
+(`name`, `root`), and `git` with `available`, `reason` (`null`, or `not-a-repository`, `no-commits`,
+`git-not-found`, `git-error`, `not-requested`), `head` (the checkout's HEAD, resolved on its own), `history_rev`
+(the commit history was read up to: HEAD for a scan, the base for `triage` and `check`), `shallow` and `commits`.
+All ids are full object ids. `triage` and `check` add `meta.change` (`since`, `base`, `head`, `uncommitted`), and
+`check` adds `meta.analysis`, which says `skipped` with reason `no-code-changes` when nothing was compared, so an
+empty `findings` list is never mistaken for a clean comparison. The older top-level fields (`git` in a scan, the
+short `change.base` and `change.head` of `triage` and `check`) keep their meaning. A caught error (an unknown base,
+a directory that is not a repository) exits 2 and prints nothing on stdout; exit 1 is reserved for `check
+--fail-on`, a result that was computed and failed the chosen gate.
+
+## Architecture
+
+One pass over a repository builds one `Analysis`; every command is a view of it, and no view reads the files again.
+The package is standard library only, about 6,000 lines of code in 32 files. The table is the import graph of this
+checkout as `repolife graph . --level file --format json` reads it, and `repolife graph .` reports the one thing the
+layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs`, so `repolife` and
+`repolife/analyzers` depend on each other, a cycle the tool lists against itself.
+
+```text
+repository ─► inventory ─► analyzers ─► graph ─► analyze ─► Analysis ─► one view per command ─► cli
+ (files, git)      │       (python, javascript)   ▲            ▲                  │
+                   └─► textrefs (config, CI, docs) ┘   gitlog ─► ownership         meta (on every JSON object)
+```
+
+| Stage | Modules | What happens |
+|---|---|---|
+| Discover | `inventory` | lists the files (`git ls-files`, or a walk without git), detects the language, reads the text and counts code, comment and blank lines; binaries, build output and oversized files are skipped |
+| Understand code | `analyzers/python` (on `ast`), `analyzers/javascript` (`jslex` scanner, `jsproject` resolution), `textrefs` | each analyzer turns its files into edges, entry points, tests and a resolver for names found elsewhere; `textrefs` finds the names that config, CI, shell scripts and docs mention |
+| Reachability | `graph` | walks from entry points and config references; tests are roots of their own, so test-only code stays visible |
+| History | `gitlog`, `ownership` | history is read once up to a rev for per-file activity and fix commits, and once more for the two review windows; `GitState` says why history is or is not there; ownership credits authors with yearly decay, marks owners who went quiet and compares with `CODEOWNERS` |
+| Verdict | `analyze`, `model` | one `FileRecord` per file, the status rules, and the `Analysis` everything below reads |
+| Views | `report` + `render` (scan, Markdown and JSON), `htmlreport` + `htmlassets` + `graphview` (HTML, mermaid, dot), `explain` (why), `modules` (graph, impact), `review` (review load), `triage`, `since` + `sinceview` + `sarifview` (check) | each computes its own tables from an `Analysis` and renders them; `render` is the shared Markdown, `meta` the shared `meta` block |
+| Front door | `cli` | argparse, `--format` and `--out`, and the exit codes: 0; 1 for a `--fail-on` gate that failed or an integration plan blocked by conflicts, always with the complete result; 2 for a caught error, with nothing on stdout |
+| Into other repositories | `templates`, `mount`, `integration` | the skill text, the legacy `init`, and the receipt-based install, update, status and remove |
+
+Two commands run the pipeline against another revision. `triage` analyses the working tree with history read up to the
+base of the change, so the change's own commits count neither as activity nor as ownership. `check` extracts the base
+from git objects into a scratch directory (`cat-file --batch`, never `git archive`, which honours export-ignore),
+analyses both sides with the same settings and compares only the import graph and the reachability of each file;
+status, confidence and owners are never compared between the two analyses. Only `inventory`, `gitlog`, `triage` and
+`since` run git; the analyzers and views never shell out, and nothing fetches, caches or calls a model, so the same tree
+and history give the same output. The tests in `tests/`, one file per area, build small repositories in temporary
+directories with fixed commit dates and assert on the output, so the suite needs git and nothing else, except `node`
+for the one test that runs the HTML page's script, which is skipped without it.
 
 ## Supporting another language
 

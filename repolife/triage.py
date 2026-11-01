@@ -16,7 +16,7 @@ from collections import defaultdict, deque
 from datetime import datetime, timezone
 from pathlib import Path
 
-from . import __version__, gitlog, inventory
+from . import __version__, gitlog, inventory, meta
 from .analyze import Analysis, analyze
 from .config import Config
 from .model import SCHEMA_VERSION
@@ -267,6 +267,7 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": root.name},
         "kind": "triage",
+        "meta": meta.of(a, change={"since": since, "base": base, "head": head, "uncommitted": dirty}),
         "change": {"since": since, "base": base[:9], "head": head[:9], "uncommitted": dirty, "authors": sorted(authors.values())},
         "summary": {
             "files": len(rows),

@@ -5,7 +5,7 @@ from __future__ import annotations
 import posixpath
 import time
 from collections import Counter
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -34,6 +34,7 @@ class Analysis:
     unparsed: list[str]
     ownership: Ownership | None = None  # None without git history
     changes: list[gitlog.Change] | None = None  # commits of the last two review windows; None without git history or with review_days = 0
+    git: gitlog.GitState = field(default_factory=lambda: gitlog.GitState(False, "not-requested", None, None))  # why history is or is not there
 
 
 def _day(ts: int) -> str:
@@ -163,9 +164,11 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
                 scans[path] = textrefs.scan_text(texts[path], weak=mode == "weak")
 
     g = graph.build(results, analyzed, scans, cfg.keep, cfg.entry)
-    activity = gitlog.load(root, now, cfg.active_days, cfg.ignore_authors, rev) if used_git else None
+    # History is read whether or not git supplied the file list: a repository whose commits hold no files yet still
+    # has history, and when there is none `describe` below says why.
+    activity = gitlog.load(root, now, cfg.active_days, cfg.ignore_authors, rev)
 
-    changes = gitlog.changes(root, now, cfg.review_days, cfg.ignore_authors) if used_git and cfg.review_days > 0 else None
+    changes = gitlog.changes(root, now, cfg.review_days, cfg.ignore_authors) if activity is not None and cfg.review_days > 0 else None
 
     extra_comments: dict[str, set[int]] = {}
     for res in results:
@@ -204,4 +207,5 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
         unparsed=sorted(unparsed),
         ownership=owners,
         changes=changes,
+        git=gitlog.describe(root, rev, activity),
     )

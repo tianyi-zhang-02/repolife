@@ -9,13 +9,23 @@ repolife reports five things about a repository: how much code there is, how rec
 changed, whether anything still reaches it, who has been maintaining it, and how its modules depend on
 each other. It only reads; it never edits code.
 
+Pick the query by the task, and do not start every task with a full scan:
+
+- about to edit a file or directory: `repolife impact <path>` for what it reaches, the tests to run and who maintains it
+- preparing or doing a review: `repolife triage --since <base>` for which changed files deserve a person first
+- finishing a change: `repolife check --since <base>` for what it did to the structure
+- checking a claim about one file: `repolife why <path>` (`--format json` gives the same facts as data)
+- getting to know a repository, or planning a cleanup: `repolife scan` and `repolife graph`
+
 ## Run it
 
 ```bash
-repolife scan . --format json --out .repolife/report.json
+repolife scan . --format json
 ```
 
-If `repolife` is not on PATH, use `python3 -m repolife ...` or `uvx --from git+https://github.com/tianyi-zhang-02/repolife repolife ...`.
+The JSON goes to stdout; add `--out <file>` only when a task needs the report as a file. If `repolife` is not on
+PATH, try `python3 -m repolife ...`; if that fails too, the capability is unavailable: say so and follow the
+project's policy, and do not install or download anything to make a routine query work.
 Add `--format md` (the default) for a report meant to be read by a person, or `--format html --out report.html` for one
 self-contained page with the module graph and an impact explorer to open or share.
 
@@ -26,7 +36,7 @@ and `ownership` for who maintains what.
 ## Dependencies and blast radius
 
 ```bash
-repolife graph . --format json --out .repolife/graph.json
+repolife graph . --format json
 repolife impact <file-or-directory>
 ```
 
@@ -55,22 +65,27 @@ that were committed to most in the last 90 days, then by lines changed. Fix and 
 `dependents`, `owners` and `flags` are context shown beside the order, not part of it. `ripple` is code outside the
 change that imports the changed files, `tests.nearest` are the tests to run, `reviewers` are the people who maintain the
 files other than the authors, and `nobody_else_can_look` lists files only the author maintains. A flag
-`no active owner` means nobody who maintains the file has committed lately: ask a human to assign someone. History is
-read up to the base, so the change's own commits do not count. It is a prompt about where to look, not a verdict.
+`no active owner` means nobody who maintains the file has committed lately: say so where the change is described, so
+a person can decide who looks, and do not pick a reviewer from its last maintainers; whether that pauses the work is
+the team's policy, not the tool's. History is read up to the base, so the change's own commits do not count. It is a
+prompt about where to look, not a verdict.
 
 ## Check a change's structure
 
 ```bash
-repolife check --since <base> --format json --fail-on block     # without --since, uncommitted work
+repolife check --since <base> --format json --fail-on never     # without --since, uncommitted work
 ```
 
 Run it when a task is done and before the change is opened. It compares the base of the change with the working
-tree and lists what the change did to the structure, `findings` ordered by `severity`. `block` is certain breakage:
+tree and lists what the change did to the structure, `findings` ordered by `severity`. With `--fail-on never` the
+exit code stays 0 and the findings are yours to read; `--fail-on block` exits 1 on certain breakage and is for
+projects that have explicitly turned that gate on, not a default. `block` is certain breakage:
 `dangling-import` means a file the change deleted is still imported by files it did not touch, so restore it or
 update the importers. `warn` needs a decision: `new-cycle` and `cycle-grew` name the new dependency that closed the
 loop, `new-orphan` is a new file nothing reaches (`how: stranded` is a file the change cut the last link to, with
-`was_reached_from`), and `no-active-owner` is changed code nobody active maintains (`needs_human`: ask a person, do not
-pick a reviewer from its last maintainers). `info` is the rest. Static imports only: a clean result is not proof.
+`was_reached_from`), and `no-active-owner` is changed code nobody active maintains (`needs_human`: a person decides who
+looks at it; do not pick a reviewer from its last maintainers, and do not stop on your own unless the team asks for
+that). `info` is the rest. Static imports only: a clean result is not proof.
 
 ## Ownership
 
@@ -81,9 +96,9 @@ changing the code, not who is accountable, and git cannot tell who reviewed.
 - `directories[].owners` lists the people behind each directory with their share and `idle_days`
   (days since their last commit anywhere in the repository). `ownership` is `owned`,
   `no-active-owner` (the people still active hold under 20% of the maintenance) or `unknown`.
-- `ownership.needs_owner_files` is live code nobody active maintains: ask a human to assign it
-  before changing it, and do not pick a reviewer from it. `ownership.codeowners` compares CODEOWNERS
-  with the commit history (`uncovered_files`, `differing_files`).
+- `ownership.needs_owner_files` is live code nobody active maintains: name it in the change description so a
+  person can assign it, and do not pick a reviewer from it; a missing owner is a reason for care, not a rule to
+  stop. `ownership.codeowners` compares CODEOWNERS with the commit history (`uncovered_files`, `differing_files`).
 - Orphan rows carry `owner` and `owner_idle_days`: that is who to ask before deleting. An owner who
   is gone is a reason to be careful, not permission to delete.
 - To find who to ask about a path, use `repolife why <path>`: its `owners:` line lists who maintains it

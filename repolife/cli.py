@@ -7,9 +7,9 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, config, graphview, htmlreport, modules, since, sinceview
+from . import __version__, config, graphview, htmlreport, integration, modules, sarifview, since, sinceview
 from .analyze import analyze
-from .explain import TargetError, explain
+from .explain import TargetError, explain, why_json
 from .render import markdown
 from .report import build_report
 from .triage import TriageError, compute as triage_compute, markdown as triage_markdown
@@ -92,10 +92,11 @@ def _cmd_why(args: argparse.Namespace) -> int:
     root = _root(args.repo)
     analysis = analyze(root, _config_for(root, args))
     try:
-        print(explain(analysis, args.target))
+        text = json.dumps(why_json(analysis, args.target), indent=2) + "\n" if args.format == "json" else explain(analysis, args.target) + "\n"
     except TargetError as exc:
         print(f"repolife: {exc}", file=sys.stderr)
         return 2
+    _emit(text, args.out)
     return 0
 
 
@@ -136,7 +137,13 @@ def _cmd_check(args: argparse.Namespace) -> int:
     except since.CheckError as exc:
         print(f"repolife: {exc}", file=sys.stderr)
         return 2
-    _emit(json.dumps(result, indent=2) + "\n" if args.format == "json" else sinceview.markdown(result, args.limit), args.out)
+    if args.format == "sarif":
+        text = json.dumps(sarifview.sarif(result, root), indent=2) + "\n"
+    elif args.format == "json":
+        text = json.dumps(result, indent=2) + "\n"
+    else:
+        text = sinceview.markdown(result, args.limit)
+    _emit(text, args.out)
     return 1 if since.failing(result, args.fail_on) else 0
 
 
@@ -166,6 +173,21 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_integration(args: argparse.Namespace) -> int:
+    root = Path(args.path).expanduser()
+    if not root.is_dir():
+        print(f"repolife: {args.path}: not a directory", file=sys.stderr)
+        return 2
+    root = root.resolve()
+    try:
+        doc = integration.status(root) if args.op == "status" else integration.run(root, args.op, args.agent, dry_run=args.dry_run)
+    except integration.IntegrationError as exc:
+        print(f"repolife: {exc}", file=sys.stderr)
+        return 2
+    _emit(json.dumps(doc, indent=2) + "\n" if args.format == "json" else integration.text(doc), None)
+    return 1 if doc.get("conflicts") else 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="repolife", description="Which parts of a repository are alive? Volume, git activity and reachability in one report.")
     parser.add_argument("--version", action="version", version=f"repolife {__version__}")
@@ -183,6 +205,8 @@ def build_parser() -> argparse.ArgumentParser:
     why = sub.add_parser("why", help="show the evidence behind one file's verdict")
     why.add_argument("target", help="file path, or dotted module name")
     why.add_argument("--repo", default=".", help="repository root (default: .)")
+    why.add_argument("--format", choices=("text", "json"), default="text", help="json: the same facts as data, with the analysis metadata")
+    why.add_argument("--out", help="write to this file instead of stdout")
     _add_analysis_options(why)
     why.set_defaults(func=_cmd_why)
 
@@ -220,7 +244,7 @@ def build_parser() -> argparse.ArgumentParser:
     check = sub.add_parser("check", help="what a change did to the structure: new orphans and cycles, imports of deleted files, changed code nobody maintains")
     check.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
     check.add_argument("--repo", default=".", help="repository root (default: .)")
-    check.add_argument("--format", choices=("md", "json"), default="md")
+    check.add_argument("--format", choices=("md", "json", "sarif"), default="md", help="sarif: the same findings as a SARIF 2.1.0 log, one result per finding, file-level locations")
     check.add_argument("--limit", type=int, default=20, metavar="N", help="md: rows per table (default 20)")
     check.add_argument("--fail-on", choices=("never", "warn", "block"), default="never", help="exit 1 when a finding is at least this serious: block = deleted files still imported, warn = also new orphans, cycles and unowned code (default: never)")
     check.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
@@ -235,6 +259,22 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--force", action="store_true", help="overwrite files repolife would otherwise leave alone")
     init.add_argument("--dry-run", action="store_true", help="show what would change without writing")
     init.set_defaults(func=_cmd_init)
+
+    integ = sub.add_parser("integration", help="install, update, inspect or remove the project integration (agent skills, AGENTS.md block) with a receipt, reversibly")
+    ops = integ.add_subparsers(dest="op", required=True, metavar="{install,update,status,remove}")
+    for op, text in (
+        ("install", "write the skill or block for each --agent and record a receipt; an existing file is a conflict, never claimed"),
+        ("update", "refresh recorded files that are still as installed; edited ones are left alone"),
+        ("status", "what the receipt records against what is on disk (reads only)"),
+        ("remove", "remove recorded files and blocks that are still as installed, and the receipt when nothing remains"),
+    ):
+        p = ops.add_parser(op, help=text)
+        p.add_argument("path", nargs="?", default=".", help="project root (default: .)")
+        p.add_argument("--format", choices=("text", "json"), default="text")
+        if op != "status":
+            p.add_argument("--agent", action="append", choices=tuple(integration.PROFILES), metavar="{claude,codex,agents}", help="profile to act on, repeatable; install needs at least one, update and remove default to every recorded profile")
+            p.add_argument("--dry-run", action="store_true", help="show the plan without writing anything")
+        p.set_defaults(func=_cmd_integration)
     return parser
 
 
