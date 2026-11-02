@@ -132,13 +132,16 @@ def _cmd_triage(args: argparse.Namespace) -> int:
 
 def _cmd_check(args: argparse.Namespace) -> int:
     root = _root(args.repo)
+    if args.locationless != "keep" and args.format != "sarif":
+        print("repolife: --locationless applies to --format sarif only", file=sys.stderr)
+        return 2
     try:
         result = since.check(root, _config_for(root, args), args.since)
     except since.CheckError as exc:
         print(f"repolife: {exc}", file=sys.stderr)
         return 2
     if args.format == "sarif":
-        text = json.dumps(sarifview.sarif(result, root), indent=2) + "\n"
+        text = json.dumps(sarifview.sarif(result, root, args.locationless), indent=2) + "\n"
     elif args.format == "json":
         text = json.dumps(result, indent=2) + "\n"
     else:
@@ -248,6 +251,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--format", choices=("md", "json", "sarif"), default="md", help="sarif: the same findings as a SARIF 2.1.0 log, one result per finding, file-level locations")
     check.add_argument("--limit", type=int, default=20, metavar="N", help="md: rows per table (default 20)")
     check.add_argument("--fail-on", choices=("never", "warn", "block"), default="never", help="exit 1 when a finding is at least this serious: block = deleted files still imported, warn = also new orphans, cycles and unowned code (default: never)")
+    check.add_argument("--locationless", choices=sarifview.LOCATIONLESS, default="keep", help="sarif: findings with no file-level location stay in `results` without a location (keep, default), or move whole into the run's properties (omit) for consumers such as GitHub code scanning that reject a result without a location; --fail-on counts them either way")
     check.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
     _add_analysis_options(check)
     check.set_defaults(func=_cmd_check)

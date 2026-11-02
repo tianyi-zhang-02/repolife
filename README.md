@@ -481,12 +481,16 @@ travels with the file. The evidence is file-level, so a location names a file an
 finding that still exists and stays inside the analysed root is the primary location, the others are related
 locations, and a finding with no usable path has no location at all rather than an invented one. Paths are URI-encoded
 relative to `originalUriBaseIds.REPOLIFE_ROOT`, the directory that was analysed. Nothing is uploaded or configured, and
-no fingerprints are generated. Two limits to know before wiring it anywhere: a consumer such as GitHub code scanning
-shows only results that have a location, so grouped or repository-level findings stay in the file rather than inline;
-and a check compares one change with one base, so feeding it into a persistent alert category can make an old
-repository-wide problem look fixed when a later change simply did not touch it. `--fail-on` keeps its meaning: with
-`block` the exit code is 1 and the document is still complete. Copyable shell and Python recipes for CI artifacts, test
-selection and gates are in [docs/workflow-recipes.md](docs/workflow-recipes.md).
+no fingerprints are generated. Two limits to know before wiring it anywhere. First, GitHub code scanning rejects a
+whole log that contains a result without a location (observed on a real upload, 2026-11-01), and `new-dependency`,
+`cycle-resolved` and a cycle finding with no example file have none. For that consumer add `--locationless omit`: those
+findings leave `results` and move whole into the run's `properties["repolife/locationless"].omitted`, which also
+records their `count` and the `policy` in force, so nothing is dropped and nothing gets an invented location. The
+default `keep` leaves them in `results`, and `--fail-on` counts findings, not displayed results, so the exit code is the
+same under both. Second, a check compares one change with one base, so feeding it into a persistent alert category can
+make an old repository-wide problem look fixed when a later change simply did not touch it. `--fail-on` keeps its
+meaning: with `block` the exit code is 1 and the document is still complete. Copyable shell and Python recipes for CI
+artifacts, test selection and gates are in [docs/workflow-recipes.md](docs/workflow-recipes.md).
 
 Only what static imports show is compared, so a clean result is not proof that nothing else depends on the change, and
 a `block` is certain only for importers the change left untouched. Both sides are cut into modules the same way, so a

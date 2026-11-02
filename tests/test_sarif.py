@@ -108,6 +108,26 @@ class MappingTest(unittest.TestCase):
         self.assertEqual(props["meta"]["git"]["head"], "a" * 40)
         self.assertEqual(props["notes"], ["Static imports only."])
 
+    def test_locationless_findings_are_kept_and_counted_by_default(self):
+        # the new cycle (no example file), the resolved orphan (its only file is deleted) and the resolved cycle
+        self.assertEqual(self.run["properties"]["repolife/locationless"], {"policy": "keep", "count": 3, "omitted": []})
+        self.assertEqual(len(self.run["results"]), len(FINDINGS))
+
+    def test_omit_moves_locationless_findings_whole_into_the_run_properties(self):
+        run = sarif(RESULT, self.root, locationless="omit")["runs"][0]
+        kept = [r for r in self.run["results"] if "locations" in r]
+        self.assertEqual(run["results"], kept)  # same results, same order, only the location-free ones gone
+        self.assertTrue(all("locations" in r for r in run["results"]))
+        gone = run["properties"]["repolife/locationless"]
+        self.assertEqual((gone["policy"], gone["count"]), ("omit", 3))
+        self.assertEqual(gone["omitted"], [FINDINGS[2], FINDINGS[5], FINDINGS[6]])  # the whole finding, not a summary of it
+        self.assertEqual(run["properties"]["repolife/check"], self.run["properties"]["repolife/check"])  # the check mirror is untouched
+        json.dumps(run)
+
+    def test_unknown_locationless_policy_is_refused(self):
+        with self.assertRaises(ValueError):
+            sarif(RESULT, self.root, locationless="drop")
+
 
 def run_cli(*argv):
     out, err = io.StringIO(), io.StringIO()
@@ -182,6 +202,29 @@ class CliTest(TempRepo):
         for r in run["results"]:
             for loc in r.get("locations", []):
                 self.assertFalse(loc["physicalLocation"]["artifactLocation"]["uri"].startswith("pkg/"))
+
+    def test_locationless_omit_is_opt_in_and_leaves_the_gate_alone(self):
+        _, kept_out, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "sarif")
+        kept = json.loads(kept_out)["runs"][0]
+        code, out, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "sarif", "--locationless", "omit")
+        self.assertEqual(code, 0)
+        run = json.loads(out)["runs"][0]
+        self.assertTrue(all("locations" in r for r in run["results"]))
+        self.assertEqual(run["results"], [r for r in kept["results"] if "locations" in r])
+        without = [r["properties"]["repolife/finding"] for r in kept["results"] if "locations" not in r]
+        self.assertEqual(kept["properties"]["repolife/locationless"], {"policy": "keep", "count": len(without), "omitted": []})
+        self.assertEqual(run["properties"]["repolife/locationless"], {"policy": "omit", "count": len(without), "omitted": without})
+        code, gated, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "sarif", "--locationless", "omit", "--fail-on", "block")
+        self.assertEqual(code, 1)  # the block finding is located, and the gate would count it even if it were not
+        self.assertEqual(json.loads(gated)["runs"][0]["results"], run["results"])
+
+    def test_locationless_applies_to_sarif_only(self):
+        for fmt in ("json", "md"):
+            code, out, err = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", fmt, "--locationless", "omit")
+            self.assertEqual((code, out), (2, ""))
+            self.assertIn("--locationless", err)
+        code, _, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "json", "--locationless", "keep")
+        self.assertEqual(code, 0)  # the default is always allowed
 
 
 if __name__ == "__main__":
