@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, config, graphview, htmlreport, integration, modules, sarifview, since, sinceview
+from . import __version__, config, graphview, htmlreport, integration, legacy, modules, sarifview, since, sinceview
 from .analyze import analyze
 from .explain import TargetError, explain, why_json
 from .render import markdown
@@ -47,6 +47,8 @@ def _non_negative(text: str) -> int:
 
 def _config_for(root: Path, args: argparse.Namespace) -> config.Config:
     cfg = config.load(root)
+    for note in cfg.notes:
+        print(f"tessri: {note}", file=sys.stderr)
     for key in ("active_days", "dormant_days", "owner_inactive_days", "review_days", "depth", "top"):
         value = getattr(args, key)
         if value is not None:
@@ -192,7 +194,7 @@ def _cmd_integration(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="tessri", description="Tessri: keep code understandable. How a codebase fits together, what a change can reach, who is able to review it and what nobody maintains, from code and git history, with the evidence for every claim.")
+    parser = argparse.ArgumentParser(prog="tessri", description=f"Tessri ({legacy.FORMERLY}): keep code understandable. How a codebase fits together, what a change can reach, who is able to review it and what nobody maintains, from code and git history, with the evidence for every claim.")
     parser.add_argument("--version", action="version", version=f"tessri {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
@@ -281,6 +283,12 @@ def build_parser() -> argparse.ArgumentParser:
             p.add_argument("--dry-run", action="store_true", help="show the plan without writing anything")
         p.set_defaults(func=_cmd_integration)
     return parser
+
+
+def legacy_main(argv: list[str] | None = None) -> int:
+    """The program under its old name (the old command, or `python -m` with the old module): the same thing, after a notice."""
+    print(f"tessri: {legacy.NOTICE}", file=sys.stderr)
+    return main(argv)
 
 
 def main(argv: list[str] | None = None) -> int:

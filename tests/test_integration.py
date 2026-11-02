@@ -350,7 +350,7 @@ class StatusTest(Project):
         self.assertEqual((doc["installed"], doc["targets"], doc["attention"]), (False, [], False))
         code, out, _ = run_cli("integration", "status", str(self.root))
         self.assertEqual(code, 0)
-        self.assertIn("No tessri integration receipt", out)
+        self.assertIn("No Tessri integration receipt", out)
 
     def test_legacy_files_are_unmanaged(self):
         mount(self.root, {"claude", "agents"}, None, "tessri")

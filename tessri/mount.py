@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import templates
+from . import legacy, templates
 
 BEGIN = "<!-- tessri:begin -->"
 END = "<!-- tessri:end -->"
@@ -49,9 +49,11 @@ def _marked_block(root: Path, rel: str, body: str, dry_run: bool) -> Action:
         _write(path, block + "\n", dry_run)
         return Action(rel, "created")
     text = path.read_text(encoding="utf-8", errors="replace")
-    start, end = text.find(BEGIN), text.find(END)
-    if start != -1 and end > start:
-        new = text[:start] + block + text[end + len(END) :]
+    for begin, end_marker in ((BEGIN, END), (legacy.BEGIN, legacy.END)):  # a block written under the old name is replaced in place
+        start, end = text.find(begin), text.find(end_marker)
+        if start != -1 and end > start:
+            new = text[:start] + block + text[end + len(end_marker) :]
+            break
     else:
         new = text.rstrip("\n") + ("\n\n" if text.strip() else "") + block + "\n"
     if new == text:

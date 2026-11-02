@@ -1,23 +1,27 @@
 # tessri.
 
-**Which parts of a repository are alive?**
+**Keep code understandable.**
 
-Tessri is a triage layer for repositories where agents write most of the code. With nothing installed,
-offline and without a model, it tells a person where to look first in a change, who is able to look, and what
-nobody maintains. Every number it prints can be checked: `tessri why` shows the evidence behind a verdict,
-Python imports come from Python's own parser, ownership and churn are read from git history, and the order
-`triage` puts files in was backtested on real history. That is also why there is no risk score: the composite
-we tried did not beat its parts, so it was left out.
+Tessri is an embeddable maintainability layer for codebases where agents write most of the code. Offline, with
+nothing installed and no model, it shows how a system fits together, what a change can reach, who is able to review
+it and what nobody maintains. Every claim can be traced to its evidence: `tessri why` shows what a verdict rests on,
+Python imports come from Python's own parser, ownership and churn are read from git history, and the order `triage`
+puts files in was backtested on real history. That is also why there is no risk score: the composite we tried did
+not beat its parts, so it was left out. What the analysis cannot see, it says it cannot see.
 
-It reads a repository and reports four things in one pass: how much code there is,
-how recently each file changed, whether anything still reaches it, and who has been maintaining it.
-It is built for coding agents (stable JSON, an agent skill, a `why` command to verify every claim)
-and is just as readable by a person. When a codebase outgrows what anyone can review, it answers
-where the volume is, what is unused, and which corners nobody looks after. Three more commands read the same
-import graph and history: `graph` shows how the modules depend on each other, `impact` what a change can reach, and
-`triage` which files of a change deserve a human first. It fits into what a team already runs rather than asking for
-a new place: `check` writes SARIF for tools that read it, `integration` installs the agent skill with a receipt and
-takes it out again, and every JSON object says which commit and which history it describes.
+| When you… | Ask | It answers with |
+| --- | --- | --- |
+| enter or return to a project | `tessri scan`, `tessri graph` | how much code there is and where, how the modules depend on each other, the cycles and the few dependencies that would break them |
+| prepare a change | `tessri impact <path>` | what the change can reach, the tests that reach it, who maintains the affected code, and which kind of evidence each step rests on |
+| review a change | `tessri triage --since main` | which changed files deserve a person first, and who is able to look |
+| finish a change | `tessri check --since main` | what the change did to the structure, as Markdown, JSON or SARIF, with an exit code for CI |
+| doubt a claim | `tessri why <path>` | the evidence behind one verdict |
+
+It is built for coding agents (stable JSON, an agent skill, a `meta` block that says which commit and which history
+every object describes) and is just as readable by a person, in the terminal or in one offline HTML page. It fits
+into what a team already runs rather than asking for a new place: `check` writes SARIF for tools that read it, and
+`integration` installs the agent skill with a receipt and takes it out again. Tessri was called repolife until
+0.2.0; the old name [keeps working through 0.2.x](#formerly-repolife).
 
 - **Zero dependencies.** Pure Python 3.11+ standard library.
 - **Mounts into any repo, and unmounts again.** `tessri integration install --agent claude` writes the project skill
@@ -537,7 +541,9 @@ blindness, and every one is repeated in text. Names are escaped everywhere, and 
 
 ## Configuration
 
-`.tessri.toml` (or `[tool.tessri]` in `pyproject.toml`); every flag has a CLI equivalent.
+`.tessri.toml` (or `[tool.tessri]` in `pyproject.toml`); every flag has a CLI equivalent. The old names,
+`.repolife.toml` and `[tool.repolife]`, are still read when the new ones are absent, with a notice on stderr
+([details](#formerly-repolife)).
 
 ```toml
 active_days = 90
@@ -586,8 +592,9 @@ a directory that is not a repository) exits 2 and prints nothing on stdout; exit
 One pass over a repository builds one `Analysis`; every command is a view of it, and no view reads the files again.
 The package is standard library only, about 6,000 lines of code in 32 files. The table is the import graph of this
 checkout as `tessri graph . --level file --format json` reads it, and `tessri graph .` reports the one thing the
-layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs`, so `tessri` and
-`tessri/analyzers` depend on each other, a cycle the tool lists against itself.
+layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs` and
+`analyzers/__init__.py` takes the old plugin group name from `legacy`, so `tessri` and `tessri/analyzers` depend on
+each other, a cycle the tool lists against itself.
 
 ```text
 repository ─► inventory ─► analyzers ─► graph ─► analyze ─► Analysis ─► one view per command ─► cli
@@ -622,7 +629,8 @@ The engine in `tessri/graph.py` knows nothing about any language. An analyzer ma
 `edges` (what each depends on), `roots` (entry points), `tests`, and a `resolve_reference` for names
 found in config. Subclass `tessri.analyzers.Analyzer`, implement `handles(path)` and
 `run(files, repo)`, return a `LanguageResult`, and register it from a package through the
-`tessri.analyzers` entry-point group. `repo.paths` lists every file and `repo.read(path)` returns
+`tessri.analyzers` entry-point group (the `repolife.analyzers` group an older version used is read too, through
+0.2.x). `repo.paths` lists every file and `repo.read(path)` returns
 any file's text, for project metadata such as `tsconfig.json` or `go.mod`.
 
 Two reference implementations, written against the same interface: `tessri/analyzers/python.py`
@@ -661,6 +669,26 @@ Two reference implementations, written against the same interface: `tessri/analy
   [vulture](https://github.com/jendrikseipp/vulture). For multi-language dead-code detection see
   [fossil-mcp](https://docs.rs/crate/fossil-mcp/latest/source/README.md); for churn x complexity on
   JS/TS see [fallow](https://docs.rs/crate/fallow-cli/2.94.0).
+
+## Formerly repolife
+
+Tessri was called repolife until 0.2.0. The old name keeps working through 0.2.x and goes away in 0.3.0:
+
+- `repolife …` and `python -m repolife …` run the same program after a one-line notice on stderr, and
+  `import repolife` works with a `DeprecationWarning`.
+- `.repolife.toml` and `[tool.repolife]` are read when `.tessri.toml` and `[tool.tessri]` are absent, with a notice
+  on stderr; when both exist the new one is in force and the old one is ignored, also with a notice.
+- A receipt, skill files and AGENTS.md markers that 0.1.x installed are recognised by `tessri integration status`
+  under their recorded paths, and the next `install`, `update` or `remove` moves them: the skill file is created at
+  its new path and the old one removed in the same run, the AGENTS.md block is rewritten in place with the new
+  markers, and the receipt becomes `.tessri-integration.json` with the old file deleted. A user-modified old file is
+  a conflict, as always, and then nothing is written.
+- `tessri init` replaces an AGENTS.md block that `repolife init` wrote instead of adding a second one.
+- Analyzer plugins registered under the `repolife.analyzers` entry-point group keep loading.
+
+What changed for readers of the output is listed in [CHANGELOG.md](CHANGELOG.md): `tool.name` is `tessri` (the
+schema version is unchanged), SARIF rule ids are `tessri/<kind>` under the driver `tessri` with the base id
+`TESSRI_ROOT`, the scan heading is `# Tessri report`, and stderr lines start with `tessri:`.
 
 ## Development
 

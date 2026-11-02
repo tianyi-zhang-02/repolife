@@ -23,9 +23,11 @@ dependencies = []
 [project.urls]
 Homepage = "https://github.com/tianyi-zhang-02/tessri"
 Issues = "https://github.com/tianyi-zhang-02/tessri/issues"
+Changelog = "https://github.com/tianyi-zhang-02/tessri/blob/main/CHANGELOG.md"
 
 [project.scripts]
 tessri = "tessri.cli:main"
+repolife = "tessri.cli:legacy_main"  # the old name, through 0.2.x
 
 [tool.setuptools.packages.find]
-include = ["tessri*"]
+include = ["tessri*", "repolife*"]  # repolife is the compatibility shim
