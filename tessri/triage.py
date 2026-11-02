@@ -263,7 +263,7 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
         notes.append("The repository has little history, so the ordering falls back to the size of the change.")
     return {
         "schema_version": SCHEMA_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": root.name},
         "kind": "triage",

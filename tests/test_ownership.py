@@ -7,12 +7,12 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from helpers import TempRepo, git, write_tree
-from repolife import config, gitlog, ownership
-from repolife.analyze import analyze
-from repolife.cli import main
-from repolife.explain import explain
-from repolife.render import markdown
-from repolife.report import build_report
+from tessri import config, gitlog, ownership
+from tessri.analyze import analyze
+from tessri.cli import main
+from tessri.explain import explain
+from tessri.render import markdown
+from tessri.report import build_report
 
 ALICE = ("Alice Adams", "alice@example.com")
 ALICE_HOME = ("Alice Adams", "alice@home.example")  # same person, another address
@@ -144,7 +144,7 @@ class OwnershipTest(Scenario):
         self.assertNotIn("noreply", out.getvalue())
 
     def test_options_come_from_the_config_file_and_the_command_line(self):
-        write_tree(self.root, {".repolife.toml": 'owner_inactive_days = 900\nignore_authors = ["alice*"]\n'})
+        write_tree(self.root, {".tessri.toml": 'owner_inactive_days = 900\nignore_authors = ["alice*"]\n'})
         cfg = config.load(self.root)
         self.assertEqual((cfg.owner_inactive_days, cfg.ignore_authors), (900, ["alice*"]))
         out = io.StringIO()

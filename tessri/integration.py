@@ -1,13 +1,13 @@
-"""`repolife integration install|update|status|remove`: a project integration that can be previewed, updated and
+"""`tessri integration install|update|status|remove`: a project integration that can be previewed, updated and
 removed without touching anything the user wrote.
 
-The lifecycle keeps a receipt, `.repolife-integration.json`, at the project root: which profiles are installed,
+The lifecycle keeps a receipt, `.tessri-integration.json`, at the project root: which profiles are installed,
 the hash of every file it wrote, the exact span it inserted into a shared `AGENTS.md`, whether it created each
 file and which directories it made. Only what the receipt records is ever updated or removed. A file that is
 already there, even one byte-identical to the template, is a conflict and is left alone; so is a recorded file
 the user has edited. Every mutation is planned and checked in full before the first write, a dry run writes
 nothing, single files are replaced atomically and an ordinary failure is rolled back. This is not a cross-file
-transaction. `repolife init` (mount.py) is unchanged and leaves no receipt, so its files are never claimed.
+transaction. `tessri init` (mount.py) is unchanged and leaves no receipt, so its files are never claimed.
 """
 
 from __future__ import annotations
@@ -25,8 +25,8 @@ from . import __version__, templates
 from .model import SCHEMA_VERSION
 from .mount import BEGIN, END
 
-RECEIPT = ".repolife-integration.json"
-LOCK = ".repolife-integration.lock"
+RECEIPT = ".tessri-integration.json"
+LOCK = ".tessri-integration.lock"
 MANIFEST_VERSION = 1
 RESULT_VERSION = 1
 ACTIONS = ("create", "update", "remove", "unchanged", "forget")
@@ -47,8 +47,8 @@ class Profile:
 
 
 PROFILES = {
-    "claude": Profile("claude", ".claude/skills/repolife/SKILL.md", "file", "start a new Claude Code session in this project so it discovers the skill"),
-    "codex": Profile("codex", ".agents/skills/repolife/SKILL.md", "file", "restart Codex in this project so it discovers the skill"),
+    "claude": Profile("claude", ".claude/skills/tessri/SKILL.md", "file", "start a new Claude Code session in this project so it discovers the skill"),
+    "codex": Profile("codex", ".agents/skills/tessri/SKILL.md", "file", "restart Codex in this project so it discovers the skill"),
     "agents": Profile("agents", "AGENTS.md", "span", "hosts that read AGENTS.md pick the block up on their next read"),
 }
 
@@ -160,7 +160,7 @@ class Receipt:
     def to_bytes(self) -> bytes:
         doc = {
             "manifest_version": MANIFEST_VERSION,
-            "tool": {"name": "repolife", "version": self.tool_version},
+            "tool": {"name": "tessri", "version": self.tool_version},
             "profiles": self.profiles(),
             "targets": [self.get(p).to_json() for p in self.profiles()],  # type: ignore[union-attr]
         }
@@ -175,7 +175,7 @@ class Receipt:
         if not isinstance(doc, dict):
             raise IntegrationError(f"{RECEIPT}: the document is not an object")
         if doc.get("manifest_version") != MANIFEST_VERSION:
-            raise IntegrationError(f"{RECEIPT}: manifest_version {doc.get('manifest_version')!r} is not supported (this repolife reads {MANIFEST_VERSION})")
+            raise IntegrationError(f"{RECEIPT}: manifest_version {doc.get('manifest_version')!r} is not supported (this Tessri reads {MANIFEST_VERSION})")
         raw = doc.get("targets")
         if not isinstance(raw, list):
             raise IntegrationError(f"{RECEIPT}: `targets` is not a list")
@@ -294,7 +294,7 @@ def _select(receipt: Receipt | None, profiles: list[str] | None, op: str) -> lis
 def _install_step(root: Path, prof: Profile, data: bytes | None) -> Step | Conflict:
     if prof.kind == "file":
         if data is not None:
-            return Conflict(prof.name, prof.path, "unmanaged", "a file already exists here and no receipt records it; repolife does not claim files it did not install (move it away, or keep using it unmanaged)")
+            return Conflict(prof.name, prof.path, "unmanaged", "a file already exists here and no receipt records it; Tessri does not claim files it did not install (move it away, or keep using it unmanaged)")
         content = prof.content()
         dirs = _missing_dirs(root, prof.path)
         return Step(prof.name, prof.path, "file", "create", content, dirs=dirs, target=Target(prof.name, prof.path, "file", _sha(content), True, dirs))
@@ -302,7 +302,7 @@ def _install_step(root: Path, prof: Profile, data: bytes | None) -> Step | Confl
         span = _span_for(None)
         return Step(prof.name, prof.path, "span", "create", span, target=Target(prof.name, prof.path, "span", _sha(span), True, [], span.decode("utf-8")))
     if _BEGIN in data or _END in data:
-        return Conflict(prof.name, prof.path, "markers", "AGENTS.md already carries repolife markers that no receipt installed (a legacy `repolife init` block, or another tool); remove them by hand or leave AGENTS.md unmanaged")
+        return Conflict(prof.name, prof.path, "markers", "AGENTS.md already carries tessri markers that no receipt installed (a legacy `tessri init` block, or another tool); remove them by hand or leave AGENTS.md unmanaged")
     span = _span_for(data)
     return Step(prof.name, prof.path, "span", "update", data + span, target=Target(prof.name, prof.path, "span", _sha(span), False, [], span.decode("utf-8")))
 
@@ -314,7 +314,7 @@ def _update_step(root: Path, prof: Profile, old: Target, data: bytes | None) -> 
             dirs = sorted(set(old.dirs_created) | set(_missing_dirs(root, prof.path)), key=lambda d: d.count("/"))
             return Step(prof.name, prof.path, "file", "create", content, dirs=_missing_dirs(root, prof.path), target=Target(prof.name, prof.path, "file", _sha(content), True, dirs))
         if _sha(data) != old.sha256:
-            return Conflict(prof.name, prof.path, "modified", "the file differs from what repolife installed; it is yours now, so it is not updated or removed")
+            return Conflict(prof.name, prof.path, "modified", "the file differs from what Tessri installed; it is yours now, so it is not updated or removed")
         if data == content:
             return Step(prof.name, prof.path, "file", "unchanged", target=old)
         return Step(prof.name, prof.path, "file", "update", content, target=Target(prof.name, prof.path, "file", _sha(content), old.created, old.dirs_created))
@@ -323,7 +323,7 @@ def _update_step(root: Path, prof: Profile, old: Target, data: bytes | None) -> 
         new = _span_for(None)
         return Step(prof.name, prof.path, "span", "create", new, target=Target(prof.name, prof.path, "span", _sha(new), True, [], new.decode("utf-8")))
     if _span_state(data, span) != "ok":
-        return Conflict(prof.name, prof.path, "modified", "the block repolife inserted is no longer there as recorded (edited, duplicated or moved); it is not updated or removed")
+        return Conflict(prof.name, prof.path, "modified", "the block Tessri inserted is no longer there as recorded (edited, duplicated or moved); it is not updated or removed")
     fresh = _refreshed_span(span)
     if fresh == span:
         return Step(prof.name, prof.path, "span", "unchanged", target=old)
@@ -335,11 +335,11 @@ def _remove_step(prof: Profile, old: Target, data: bytes | None) -> Step | Confl
         return Step(prof.name, prof.path, prof.kind, "forget", dirs=list(old.dirs_created))  # the dirs it made may still be empty
     if prof.kind == "file":
         if _sha(data) != old.sha256:
-            return Conflict(prof.name, prof.path, "modified", "the file differs from what repolife installed; it is yours now, so it is not removed (the receipt keeps recording it)")
+            return Conflict(prof.name, prof.path, "modified", "the file differs from what Tessri installed; it is yours now, so it is not removed (the receipt keeps recording it)")
         return Step(prof.name, prof.path, "file", "remove", delete=True, dirs=list(old.dirs_created))
     span = (old.span or "").encode("utf-8")
     if _span_state(data, span) != "ok":
-        return Conflict(prof.name, prof.path, "modified", "the block repolife inserted is no longer there as recorded; nothing in AGENTS.md is removed (the receipt keeps recording it)")
+        return Conflict(prof.name, prof.path, "modified", "the block Tessri inserted is no longer there as recorded; nothing in AGENTS.md is removed (the receipt keeps recording it)")
     remaining = data.replace(span, b"", 1)
     if old.created and remaining == b"":
         return Step(prof.name, prof.path, "span", "remove", delete=True)
@@ -363,7 +363,7 @@ def plan(root: Path, op: str, profiles: list[str] | None) -> Plan:
     # Links are refused before anything is read, so nothing outside the project is ever read, written or deleted.
     linked = sorted({bad for bad in (_symlink_in(root, PROFILES[p].path) for p in selected) if bad})
     if linked:
-        raise IntegrationError(f"{', '.join(linked)}: a symlink in the path of a managed target; repolife does not read, write or delete through links")
+        raise IntegrationError(f"{', '.join(linked)}: a symlink in the path of a managed target; Tessri does not read, write or delete through links")
     snapshot = _snapshot(root, [PROFILES[p].path for p in selected] + [RECEIPT])
 
     steps: list[Step] = []
@@ -397,7 +397,7 @@ def plan(root: Path, op: str, profiles: list[str] | None) -> Plan:
 def _atomic_write(path: Path, data: bytes, mode: int | None) -> None:
     """Write `data` next to `path` under a fresh exclusive name and move it into place. Only the temporary file this
     call created is ever cleaned up; a user's file that happens to carry a similar name is not touched."""
-    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".repolife-tmp")
+    fd, tmp = tempfile.mkstemp(dir=path.parent, prefix=f".{path.name}.", suffix=".tessri-tmp")
     try:
         with os.fdopen(fd, "wb") as fh:
             fh.write(data)
@@ -430,7 +430,7 @@ class _Lock:
         try:
             self.fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o644)
         except FileExistsError:
-            return Conflict("", LOCK, "busy", f"{LOCK} exists: another repolife lifecycle operation is running on this project. If none is, the lock is stale; remove it by hand and retry")
+            return Conflict("", LOCK, "busy", f"{LOCK} exists: another Tessri lifecycle operation is running on this project. If none is, the lock is stale; remove it by hand and retry")
         except OSError as exc:
             raise IntegrationError(f"cannot create {LOCK}: {exc.strerror}") from exc
         try:
@@ -569,7 +569,7 @@ def _result(root: Path, plan: Plan, dry_run: bool, applied: bool) -> dict:
         "kind": f"integration-{plan.op}",
         "result_version": RESULT_VERSION,
         "manifest_version": MANIFEST_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "repo": {"name": root.name},
         "profiles": plan.profiles,
         "dry_run": dry_run,
@@ -613,7 +613,7 @@ def status(root: Path) -> dict:
         "kind": "integration-status",
         "result_version": RESULT_VERSION,
         "manifest_version": MANIFEST_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "repo": {"name": root.name},
         "installed": receipt is not None,
         "installed_by": receipt.tool_version if receipt else None,
@@ -630,9 +630,9 @@ def text(doc: dict) -> str:
     out = []
     if doc["kind"] == "integration-status":
         if not doc["installed"]:
-            out.append(f"No repolife integration receipt ({RECEIPT}) in this project.")
+            out.append(f"No tessri integration receipt ({RECEIPT}) in this project.")
         else:
-            out.append(f"Receipt {RECEIPT}: profiles {', '.join(doc['profiles']) or 'none'}, installed by repolife {doc['installed_by']}.")
+            out.append(f"Receipt {RECEIPT}: profiles {', '.join(doc['profiles']) or 'none'}, installed by tessri {doc['installed_by']}.")
         for row in doc["targets"]:
             out.append(f"{row['state']:<18} {row['path']} ({row['profile']})")
         if not doc["targets"]:

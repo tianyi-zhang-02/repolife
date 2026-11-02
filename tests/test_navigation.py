@@ -2,7 +2,7 @@
 
 `#overview`, `#impact`, `#modules` and nested ids stay plain section links. A nonempty impact query is
 `#impact?path=<encoded>&edges=all|imports&hops=<n>`, parsed and produced by two pure functions of the page script
-(`RepolifeCore.parseFragment`, `RepolifeCore.impactFragment`), which node runs here without a DOM; the script uses the
+(`TessriCore.parseFragment`, `TessriCore.impactFragment`), which node runs here without a DOM; the script uses the
 standard `URLSearchParams`, which the vm context is given explicitly. The wiring to the page (restoring on load, a
 hop limit the control did not offer getting its own option, replacing the address as the query changes, one history
 entry per view change) needs a browser and is not exercised here."""
@@ -25,7 +25,7 @@ const pick = id => html.match(new RegExp('<script[^>]*id="' + id + '"[^>]*>([\\s
 const ctx = {URLSearchParams};
 vm.createContext(ctx);
 new vm.Script(pick('app')).runInContext(ctx);
-const core = ctx.RepolifeCore;
+const core = ctx.TessriCore;
 const jobs = JSON.parse(fs.readFileSync(jobsPath, 'utf8'));
 const out = jobs.map(job => job[0] === 'parse' ? core.parseFragment(job[1]) : core.impactFragment(job[1], job[2], job[3]));
 process.stdout.write(JSON.stringify(out));

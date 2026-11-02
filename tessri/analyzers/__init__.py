@@ -18,7 +18,7 @@ The reachability engine (graph.py) knows nothing about any language. It consumes
              on request; an analyzer that leaves it empty keeps working and its edges count as "unknown"
 
 To support a new language, subclass `Analyzer` and register it, either in
-`BUILTIN` below or from a third-party package through the `repolife.analyzers`
+`BUILTIN` below or from a third-party package through the `tessri.analyzers`
 entry-point group (the entry point must resolve to an `Analyzer` subclass).
 """
 
@@ -89,7 +89,7 @@ def load_analyzers() -> list[Analyzer]:
 
     classes: list[type[Analyzer]] = [PythonAnalyzer, JavaScriptAnalyzer]
     try:
-        for ep in metadata.entry_points(group="repolife.analyzers"):
+        for ep in metadata.entry_points(group="tessri.analyzers"):
             try:
                 cls = ep.load()
             except Exception:  # a broken third-party plugin must not break the scan

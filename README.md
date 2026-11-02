@@ -1,10 +1,10 @@
-# repolife
+# tessri.
 
 **Which parts of a repository are alive?**
 
-repolife is a triage layer for repositories where agents write most of the code. With nothing installed,
+Tessri is a triage layer for repositories where agents write most of the code. With nothing installed,
 offline and without a model, it tells a person where to look first in a change, who is able to look, and what
-nobody maintains. Every number it prints can be checked: `repolife why` shows the evidence behind a verdict,
+nobody maintains. Every number it prints can be checked: `tessri why` shows the evidence behind a verdict,
 Python imports come from Python's own parser, ownership and churn are read from git history, and the order
 `triage` puts files in was backtested on real history. That is also why there is no risk score: the composite
 we tried did not beat its parts, so it was left out.
@@ -20,7 +20,7 @@ a new place: `check` writes SARIF for tools that read it, `integration` installs
 takes it out again, and every JSON object says which commit and which history it describes.
 
 - **Zero dependencies.** Pure Python 3.11+ standard library.
-- **Mounts into any repo, and unmounts again.** `repolife integration install --agent claude` writes the project skill
+- **Mounts into any repo, and unmounts again.** `tessri integration install --agent claude` writes the project skill
   with a receipt; `status`, `update` and `remove` act only on what the receipt records, so nothing you wrote is ever
   overwritten or deleted. Works in an empty or non-git project too.
 - **Python and JavaScript/TypeScript** (including `.vue`, `.svelte`, `.astro`, `.mdx`) get a reachability verdict.
@@ -29,17 +29,17 @@ takes it out again, and every JSON object says which commit and which history it
   `import_module(f"pkg.{name}")` loops, tsconfig `paths`, `package.json` entries, Next.js pages, `import.meta.glob`.
 - **Knows who looks after what.** Owners come from git history (and are compared with `CODEOWNERS`),
   and code whose maintainers have all gone quiet is listed as needing an owner.
-- **One page to open.** `repolife scan --format html` writes a single self-contained file (no network, works
+- **One page to open.** `tessri scan --format html` writes a single self-contained file (no network, works
   offline, light and dark): the overview, the module graph, an impact explorer, owners and cleanup candidates.
 - **Counts the review the changes ask for.** How much code changed lately, where, by whom, and whether anyone who knows
   that code is still around to look at it.
-- **Shows the structure.** `repolife graph` rolls imports up into modules, finds the cycles and the few
-  dependencies to cut to break them; `repolife impact` lists what a change reaches, the tests that reach it and who
+- **Shows the structure.** `tessri graph` rolls imports up into modules, finds the cycles and the few
+  dependencies to cut to break them; `tessri impact` lists what a change reaches, the tests that reach it and who
   maintains the affected code, and says which kind of evidence each step rests on. Static analysis only, no model in the loop.
-- **Triages a change.** `repolife triage --since main` ranks the files of a branch, or of uncommitted work, by recent
+- **Triages a change.** `tessri triage --since main` ranks the files of a branch, or of uncommitted work, by recent
   activity, and shows what outside the change imports them, which tests reach them and who is able to look. Its order
   was backtested, and what did not help was left out of the order.
-- **Checks what a change did to the structure.** `repolife check --since main` compares a branch with its base:
+- **Checks what a change did to the structure.** `tessri check --since main` compares a branch with its base:
   files the change left unreachable, modules now in a cycle, deleted files still imported, and changed code nobody
   active maintains, with an exit code for CI.
 - **Honest about what it cannot see.** Languages without an analyzer get volume and activity,
@@ -49,38 +49,38 @@ takes it out again, and every JSON object says which commit and which history it
 ## Quick start
 
 ```bash
-pip install git+https://github.com/tianyi-zhang-02/repolife   # or run once: uvx --from git+https://github.com/tianyi-zhang-02/repolife repolife scan .
-repolife scan .                 # markdown report
-repolife scan . --format json   # machine-readable
-repolife scan . --format html --out report.html   # one page to open or share
-repolife why path/to/file.py    # the evidence behind one verdict
-repolife graph .                # how modules depend on each other, and the cycles
-repolife impact path/to/file.py # what a change can reach, the tests that reach it, who to tell
-repolife triage --since main    # the files of a change to look at first, and who can look
-repolife check --since main     # what a change did to the structure, with an exit code for CI
+pip install git+https://github.com/tianyi-zhang-02/tessri   # or run once: uvx --from git+https://github.com/tianyi-zhang-02/tessri tessri scan .
+tessri scan .                 # markdown report
+tessri scan . --format json   # machine-readable
+tessri scan . --format html --out report.html   # one page to open or share
+tessri why path/to/file.py    # the evidence behind one verdict
+tessri graph .                # how modules depend on each other, and the cycles
+tessri impact path/to/file.py # what a change can reach, the tests that reach it, who to tell
+tessri triage --since main    # the files of a change to look at first, and who can look
+tessri check --since main     # what a change did to the structure, with an exit code for CI
 ```
 
 No install at all: build a single 300 KB file and drop it into any repository.
 
 ```bash
-mkdir build && cp -r repolife build/       # from a checkout of this repository
-python3 -m zipapp build -m repolife.cli:main -o repolife.pyz
-python3 repolife.pyz scan /path/to/any/repo
+mkdir build && cp -r tessri build/       # from a checkout of this repository
+python3 -m zipapp build -m tessri.cli:main -o tessri.pyz
+python3 tessri.pyz scan /path/to/any/repo
 ```
 
 ## Mount it into a repository
 
 ```bash
-repolife integration install . --agent claude --agent codex --dry-run   # show the plan, write nothing
-repolife integration install . --agent claude --agent codex             # project skills for Claude Code and Codex
-repolife integration install . --agent agents                           # one marked block in AGENTS.md
-repolife integration status .                                           # what is installed and whether it changed
-repolife integration update .                                           # refresh files that are still as installed
-repolife integration remove .                                           # take everything out again
+tessri integration install . --agent claude --agent codex --dry-run   # show the plan, write nothing
+tessri integration install . --agent claude --agent codex             # project skills for Claude Code and Codex
+tessri integration install . --agent agents                           # one marked block in AGENTS.md
+tessri integration status .                                           # what is installed and whether it changed
+tessri integration update .                                           # refresh files that are still as installed
+tessri integration remove .                                           # take everything out again
 ```
 
-`integration` keeps a receipt, `.repolife-integration.json`, at the project root: which profiles are installed
-(`claude` writes `.claude/skills/repolife/SKILL.md`, `codex` writes `.agents/skills/repolife/SKILL.md`, `agents`
+`integration` keeps a receipt, `.tessri-integration.json`, at the project root: which profiles are installed
+(`claude` writes `.claude/skills/tessri/SKILL.md`, `codex` writes `.agents/skills/tessri/SKILL.md`, `agents`
 inserts one marked block into `AGENTS.md`), the hash of every file it wrote, the exact bytes it inserted into
 `AGENTS.md` and the directories it created. Only what the receipt records is ever updated or removed. A file that
 already exists is a conflict, even when it is byte-identical to the template; a recorded file you edited is yours
@@ -91,26 +91,26 @@ data; single files are replaced atomically and an ordinary failure is rolled bac
 transaction. Installing files does not prove a running host has discovered them: start a new session in the
 project afterwards. Nothing else is touched: no CI, hooks, configuration file, `.gitignore` line or network.
 
-Updating repolife itself does not rewrite installed instructions. For receipt-managed integrations,
-`repolife integration status .` reports `installed-outdated` when the bundled instructions have changed.
-Preview with `repolife integration update . --dry-run`, then run `repolife integration update .` to refresh
+Updating Tessri itself does not rewrite installed instructions. For receipt-managed integrations,
+`tessri integration status .` reports `installed-outdated` when the bundled instructions have changed.
+Preview with `tessri integration update . --dry-run`, then run `tessri integration update .` to refresh
 unchanged managed files and blocks. User-modified content remains a conflict; review and reconcile it yourself.
 The updated skill explains impact's evidence sources and `--edges imports`, while candidate tests remain
 subject to the project's runner and required checks.
 
-The older `repolife init` still works as before and leaves no receipt, so `integration` never claims or removes
+The older `tessri init` still works as before and leaves no receipt, so `integration` never claims or removes
 its files:
 
 ```bash
-repolife init                   # .repolife.toml, .claude/skills/repolife/SKILL.md, AGENTS.md block, .gitignore line
-repolife init --ci github       # plus a weekly workflow that uploads the report
-repolife init --dry-run         # show what would change
+tessri init                   # .tessri.toml, .claude/skills/tessri/SKILL.md, AGENTS.md block, .gitignore line
+tessri init --ci github       # plus a weekly workflow that uploads the report
+tessri init --dry-run         # show what would change
 ```
 
 `init` is safe to repeat. Files it owns are created once and never overwritten without `--force`;
 shared files (`AGENTS.md`, `.gitignore`) only get a marked block or one line that later runs update
 in place. It works in an empty repository. As a Claude Code plugin, this repository also ships
-`.claude-plugin/plugin.json` and `skills/repolife/SKILL.md`.
+`.claude-plugin/plugin.json` and `skills/tessri/SKILL.md`.
 
 ## What it tells you
 
@@ -128,7 +128,7 @@ decides them. Files reached **only from tests** are listed separately: either pr
 lost its caller, or it is test support.
 
 ```text
-$ repolife why pkg/dead_dep.py
+$ tessri why pkg/dead_dep.py
 pkg/dead_dep.py  (Python, 1 code lines)
 status:        ORPHAN (confidence high)
 reachability:  NOT reachable from any entry point, test or config reference
@@ -194,7 +194,7 @@ repository. A file or directory with no active person holding at least 20% of th
 **no active owner**.
 
 ```text
-$ repolife why legacy/old.py
+$ tessri why legacy/old.py
 legacy/old.py  (Python, 2 code lines)
 status:        DORMANT
 reachability:  reachable from a production entry point
@@ -239,7 +239,7 @@ of days before:
 | What is hardest to review? | the largest single commits, with their subject and the area they mostly touched |
 
 ```text
-$ repolife scan . --review-days 30
+$ tessri scan . --review-days 30
 ## Review load
 
 - **19** lines changed in code files (+533% against 3 before), in 4 commits across 3 areas by 2 people
@@ -272,13 +272,13 @@ each holds little; read it together with the *Owners* column.
 
 ## How the modules fit together
 
-`repolife graph` rolls the file-level import graph up into modules. A module is a directory; unless you pass
+`tessri graph` rolls the file-level import graph up into modules. A module is a directory; unless you pass
 `--module-depth N`, directories are split until none holds much more than a twelfth of the code files, so one
 big package still shows its parts. Test files are left out (every module is imported by its tests); add
 `--include-tests` to draw them.
 
 ```text
-$ repolife graph
+$ tessri graph
 **4 modules**, **5 dependencies** between them and **1 cycle**, from 5 imports across 8 code files. ...
 
 **Cycle 1**: `billing` ⇄ `core`. 2 imports among them; 1 dependency (1 import) to cut:
@@ -297,7 +297,7 @@ $ repolife graph
 
 | Output | What it gives |
 |---|---|
-| `repolife graph` | Markdown: cycles, then modules (size, *uses*, *used by*, owners), then the heaviest dependencies |
+| `tessri graph` | Markdown: cycles, then modules (size, *uses*, *used by*, owners), then the heaviest dependencies |
 | `--format json` | `modules` (with `uses`, `used_by`, `instability`, `owners`, `cycle`), `edges` (`imports`, `files`, example imports, `cut`), `cycles` |
 | `--format mermaid` / `dot` | a diagram of the heaviest ~80 dependencies, cuts drawn red; `--min-imports N` to choose the threshold |
 | `--level file --format json` | every import as a `[from, to]` pair, each file with its module, status and owner |
@@ -313,7 +313,7 @@ light edges (the true minimum is NP-hard), but it is deterministic, and the test
 irredundant.
 
 ```text
-$ repolife impact util/helpers.py
+$ tessri impact util/helpers.py
 Changing util/helpers.py  (1 file, 2 code lines) can affect:
 
 - **3 code files** in **3 modules** (37.5% of the code), 1 of them directly (one followed edge away)
@@ -364,9 +364,9 @@ outside the result is unaffected.
 ## Triage a change
 
 ```bash
-repolife triage --since main                 # a branch, judged from where it parted from main, plus uncommitted work
-repolife triage                              # only uncommitted work
-repolife triage --since main --format json   # for an agent
+tessri triage --since main                 # a branch, judged from where it parted from main, plus uncommitted work
+tessri triage                              # only uncommitted work
+tessri triage --since main --format json   # for an agent
 ```
 
 Given a change, which of its files should a human look at first, what outside the change can it ripple into, and who
@@ -375,7 +375,7 @@ who maintains it, followed by the code outside the change that imports the chang
 the tests that reach them, and the people who maintain them other than the authors.
 
 ```text
-$ repolife triage --since main
+$ tessri triage --since main
 # Change triage: demo
 
 `main` (base 8f9c528cc) to HEAD fc97f1a93. 4 code files changed, **21** lines, in 2 areas; 2 other files (2 lines of config, docs and the like) not ranked.
@@ -427,10 +427,10 @@ does not make a file depend on the package `a`, and dynamic loading and consumer
 ## Check a change's structure
 
 ```bash
-repolife check --since main                  # a branch, judged from where it parted from main, plus uncommitted work
-repolife check                               # only uncommitted work
-repolife check --since main --fail-on block  # exit 1 when something is certain to break
-repolife check --since main --format sarif --out check.sarif   # the same findings for tools that read SARIF
+tessri check --since main                  # a branch, judged from where it parted from main, plus uncommitted work
+tessri check                               # only uncommitted work
+tessri check --since main --fail-on block  # exit 1 when something is certain to break
+tessri check --since main --format sarif --out check.sarif   # the same findings for tools that read SARIF
 ```
 
 `scan` describes a repository as it is; `check` says what a change did to it. It reads the base of the change straight
@@ -447,7 +447,7 @@ structure. They answer different questions and work together.
 | `new-dependency`, `orphan-resolved`, `cycle-resolved` | info | the other differences, the good ones too |
 
 ```text
-$ repolife check --since main
+$ tessri check --since main
 # Change check: demo-check
 
 `main` (9a0025443) to d6d893879: 4 files changed, 4 of them code (2 added, 1 modified, 1 deleted), **11** lines.
@@ -472,19 +472,19 @@ $ repolife check --since main
 
 `--format sarif` writes the same check as a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
 log, for editors and services that already read that format. It is a rendering, not a second analysis: one finding
-becomes one result, in the same order, under a fixed rule per kind (`repolife/dangling-import`, `repolife/new-orphan`,
+becomes one result, in the same order, under a fixed rule per kind (`tessri/dangling-import`, `tessri/new-orphan`,
 …); `block`, `warn` and `info` become `error`, `warning` and `note`, and the observations (`new-dependency`,
 `orphan-resolved`, `cycle-resolved`) are `kind: informational` with `level: none` rather than failures. The whole
-finding, `files` and `needs_human` included, sits in the result's `properties["repolife/finding"]`, and the check's
-`meta`, `change`, `summary` and `notes` in the run's `properties["repolife/check"]`, so the identity of the comparison
+finding, `files` and `needs_human` included, sits in the result's `properties["tessri/finding"]`, and the check's
+`meta`, `change`, `summary` and `notes` in the run's `properties["tessri/check"]`, so the identity of the comparison
 travels with the file. The evidence is file-level, so a location names a file and never a line: the first path of a
 finding that still exists and stays inside the analysed root is the primary location, the others are related
 locations, and a finding with no usable path has no location at all rather than an invented one. Paths are URI-encoded
-relative to `originalUriBaseIds.REPOLIFE_ROOT`, the directory that was analysed. Nothing is uploaded or configured, and
+relative to `originalUriBaseIds.TESSRI_ROOT`, the directory that was analysed. Nothing is uploaded or configured, and
 no fingerprints are generated. Two limits to know before wiring it anywhere. First, GitHub code scanning rejects a
 whole log that contains a result without a location (observed on a real upload, 2026-11-01), and `new-dependency`,
 `cycle-resolved` and a cycle finding with no example file have none. For that consumer add `--locationless omit`: those
-findings leave `results` and move whole into the run's `properties["repolife/locationless"].omitted`, which also
+findings leave `results` and move whole into the run's `properties["tessri/locationless"].omitted`, which also
 records their `count` and the `policy` in force, so nothing is dropped and nothing gets an invented location. The
 default `keep` leaves them in `results`, and `--fail-on` counts findings, not displayed results, so the exit code is the
 same under both. Second, a check compares one change with one base, so feeding it into a persistent alert category can
@@ -501,12 +501,12 @@ size limit, anything excluded) are not part of either side.
 ## The HTML report
 
 ```bash
-repolife scan . --format html --out report.html
+tessri scan . --format html --out report.html
 ```
 
 One self-contained file: styles, script and data are inside it, nothing is fetched, and Python renders all
 sections, so it reads without scripts and prints. The viewer trials the **Tessri** identity; the package,
-command and configuration remain `repolife`. With scripts enabled, four primary navigation entries open
+command and configuration remain `tessri`. With scripts enabled, four primary navigation entries open
 one focused view at a time; additional sections are under **More views**. Use **⌘K / Ctrl+K** to find a view,
 analyzed file or directory; choosing a path opens its impact
 analysis. Escape closes quick navigation, and the arrow keys and Enter select a result. Section links and
@@ -527,17 +527,17 @@ snapshot revision remain visible; the report is a captured analysis, not a live 
 | Ownership, hotspots, cleanup | the same tables as the Markdown report, with filters on the long ones |
 
 The impact explorer walks the relationship graph embedded in the page. Its evidence selector corresponds to
-`repolife impact --edges all|imports`; its step limit corresponds to `--hops`. Tests compare both policies with
+`tessri impact --edges all|imports`; its step limit corresponds to `--hops`. Tests compare both policies with
 the Python implementation for every analyzed file and directory of this repository, including the evidence
 counts and bounded reference examples. Inferred links are disclosed rather than presented as confirmed runtime
 dependencies, and candidate test paths do not record test execution. Two differences: it names the top
 owner of each affected file rather than a rolled-up share, and it is left out (with a note) past 20,000 analysed
-files, where `repolife impact` still works. Status colours are four hues chosen to stay apart under common colour
+files, where `tessri impact` still works. Status colours are four hues chosen to stay apart under common colour
 blindness, and every one is repeated in text. Names are escaped everywhere, and emails never reach the page.
 
 ## Configuration
 
-`.repolife.toml` (or `[tool.repolife]` in `pyproject.toml`); every flag has a CLI equivalent.
+`.tessri.toml` (or `[tool.tessri]` in `pyproject.toml`); every flag has a CLI equivalent.
 
 ```toml
 active_days = 90
@@ -555,7 +555,7 @@ List them under `keep`.
 
 ## JSON report
 
-`repolife scan --format json` prints one object, versioned by `schema_version` (currently `1`; adding
+`tessri scan --format json` prints one object, versioned by `schema_version` (currently `1`; adding
 fields does not bump it). Top-level keys: `summary` (sizes, `by_status`, `orphans`, `test_only`,
 `reachability_coverage`), `languages`, `directories` (with `owners` and `ownership` per directory), `ownership`
 (`authors`, `bus_factor`, `no_active_owner`, `top_authors`, `needs_owner_files`, `codeowners`; `{"available": false}`
@@ -563,8 +563,8 @@ without git), `review` (`window`, `totals` with `bulk`, `unowned`, `areas`, `aut
 `{"available": false}` without git or with `review_days = 0`), `largest_files`, `hotspots`, `cleanup` (`orphan_files` with `owner`, `test_only_files`), `analysis`,
 `caveats`, and with `--full` a per-file `files` table.
 
-`repolife graph --format json` and `repolife impact --format json` print their own objects (`kind` is `module-graph`,
-`file-graph`, or has `target` for an impact) with the same `schema_version`. `repolife why <path> --format json`
+`tessri graph --format json` and `tessri impact --format json` print their own objects (`kind` is `module-graph`,
+`file-graph`, or has `target` for an impact) with the same `schema_version`. `tessri why <path> --format json`
 prints the same facts the text shows, as data: `file`, `verdict` (`status`, `confidence`, `reachability`,
 `entry_points`, `notes`), `git`, `owners`, `graph` (`reached_via`, `dependents`, `config_refs`, `doc_refs`,
 `depends_on`, `stranded_if_removed`) and `advice`; `git`, `owners` and `graph` are `null` when the analysis had
@@ -585,9 +585,9 @@ a directory that is not a repository) exits 2 and prints nothing on stdout; exit
 
 One pass over a repository builds one `Analysis`; every command is a view of it, and no view reads the files again.
 The package is standard library only, about 6,000 lines of code in 32 files. The table is the import graph of this
-checkout as `repolife graph . --level file --format json` reads it, and `repolife graph .` reports the one thing the
-layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs`, so `repolife` and
-`repolife/analyzers` depend on each other, a cycle the tool lists against itself.
+checkout as `tessri graph . --level file --format json` reads it, and `tessri graph .` reports the one thing the
+layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs`, so `tessri` and
+`tessri/analyzers` depend on each other, a cycle the tool lists against itself.
 
 ```text
 repository ─► inventory ─► analyzers ─► graph ─► analyze ─► Analysis ─► one view per command ─► cli
@@ -618,15 +618,15 @@ for the one test that runs the HTML page's script, which is skipped without it.
 
 ## Supporting another language
 
-The engine in `repolife/graph.py` knows nothing about any language. An analyzer maps files to
+The engine in `tessri/graph.py` knows nothing about any language. An analyzer maps files to
 `edges` (what each depends on), `roots` (entry points), `tests`, and a `resolve_reference` for names
-found in config. Subclass `repolife.analyzers.Analyzer`, implement `handles(path)` and
+found in config. Subclass `tessri.analyzers.Analyzer`, implement `handles(path)` and
 `run(files, repo)`, return a `LanguageResult`, and register it from a package through the
-`repolife.analyzers` entry-point group. `repo.paths` lists every file and `repo.read(path)` returns
+`tessri.analyzers` entry-point group. `repo.paths` lists every file and `repo.read(path)` returns
 any file's text, for project metadata such as `tsconfig.json` or `go.mod`.
 
-Two reference implementations, written against the same interface: `repolife/analyzers/python.py`
-(about 250 lines, uses `ast`) and `repolife/analyzers/javascript.py` (a hand-written scanner in
+Two reference implementations, written against the same interface: `tessri/analyzers/python.py`
+(about 250 lines, uses `ast`) and `tessri/analyzers/javascript.py` (a hand-written scanner in
 `jslex.py` plus tsconfig/package.json resolution in `jsproject.py`, because there is no parser to import).
 
 ## Limits
@@ -647,8 +647,8 @@ Two reference implementations, written against the same interface: `repolife/ana
   their real call graph, and registries, dependency injection and dynamic loading leave no edge, so a missing
   dependency is not proof there is none.
 - A dotted name or path in a string is an edge of kind `string`, and `impact` follows it by default. A tool that
-  names files in strings links itself to them: repolife's own Python analyzer holds the string `__main__.py`, so
-  on this repository `impact repolife/cli.py` reaches the analyzers from the CLI by default and `--edges imports`
+  names files in strings links itself to them: Tessri's own Python analyzer holds the string `__main__.py`, so
+  on this repository `impact tessri/cli.py` reaches the analyzers from the CLI by default and `--edges imports`
   does not. The bare `if __name__ == "__main__"` idiom makes no edge.
 - Review load counts lines changed, not effort: a generated file that is not excluded, or a mechanical rename of one
   symbol, weighs as much as careful work. It cannot see who reviewed, and it follows neither renames nor branches

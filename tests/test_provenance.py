@@ -7,9 +7,9 @@ import json
 import unittest
 
 from helpers import TempRepo, write_tree
-from repolife import analyze, cli, config, graphview, modules
-from repolife.analyzers import KINDS, Analyzer, LanguageResult, note
-from repolife.analyzers.python import PythonAnalyzer
+from tessri import analyze, cli, config, graphview, modules
+from tessri.analyzers import KINDS, Analyzer, LanguageResult, note
+from tessri.analyzers.python import PythonAnalyzer
 
 # One real import, a dotted string, a transitive importer of the string holder, a literal import_module() call, a
 # file with both kinds of evidence for the same target, and a test on each route.

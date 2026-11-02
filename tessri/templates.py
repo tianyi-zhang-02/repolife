@@ -1,32 +1,67 @@
+"""Text written into a repository by `tessri init`. Kept as strings so the tool works from a zipapp too."""
+
+CONFIG = """\
+# Tessri configuration. Every option is optional; see `tessri scan --help`.
+
+# A file touched within this many days is ACTIVE.
+# active_days = 90
+
+# A file untouched this long that few others use is DORMANT.
+# dormant_days = 365
+
+# Files that look unused but must stay: public API of a library, plugin entry
+# points, anything loaded by name from outside the repository. Globs, `*` crosses `/`.
+# keep = ["src/mypkg/api/*", "plugins/*"]
+
+# Files to leave out of the analysis entirely.
+# exclude = ["vendor/*", "**/generated/*"]
+
+# Extra entry points: a module name or a file path.
+# entry = ["mypkg.cli", "scripts/release.py"]
+
+# Ownership: an author with no commit anywhere in the repository for this many days
+# no longer counts as someone who maintains the code.
+# owner_inactive_days = 180
+
+# Review load: how much code changed in this many days, against the same number of days before.
+# 0 turns it off.
+# review_days = 30
+
+# Commit authors that never own code, matched against name or email, ignoring case.
+# Bots such as dependabot are ignored already. A .mailmap merges one person's addresses.
+# ignore_authors = ["release-script*", "*@ci.example.com"]
+"""
+
+SKILL = """\
 ---
-name: repolife
+name: tessri
 description: Inspect repository structure, static reachability, Git activity and ownership when planning a change, reviewing its impact, investigating unused code or prioritizing maintenance.
 ---
 
-# repolife
+# Tessri
 
-repolife reports five things about a repository: how much code there is, how recently it
+Tessri reports five things about a repository: how much code there is, how recently it
 changed, whether anything still reaches it, who has been maintaining it, and how its modules depend on
 each other. Its analysis queries only read the repository.
 
 Pick the query by the task, and do not start every task with a full scan:
 
-- about to edit a file or directory: `repolife impact <path>` for possible dependents, candidate tests and maintainers
-- preparing or doing a review: `repolife triage --since <base>` for which changed files deserve a person first
-- finishing a change: `repolife check --since <base>` for what it did to the structure
-- checking a claim about one file: `repolife why <path>` (`--format json` gives the same facts as data)
-- getting to know a repository, or planning a cleanup: `repolife scan` and `repolife graph`
+- about to edit a file or directory: `tessri impact <path>` for possible dependents, candidate tests and maintainers
+- preparing or doing a review: `tessri triage --since <base>` for which changed files deserve a person first
+- finishing a change: `tessri check --since <base>` for what it did to the structure
+- checking a claim about one file: `tessri why <path>` (`--format json` gives the same facts as data)
+- getting to know a repository, or planning a cleanup: `tessri scan` and `tessri graph`
 
 ## Run it
 
 For a repository overview:
 
 ```bash
-repolife scan . --format json
+tessri scan . --format json
 ```
 
-The JSON goes to stdout; add `--out <file>` only when a task needs the report as a file. If `repolife` is not on
-PATH, try `python3 -m repolife ...`; if that fails too, the capability is unavailable: say so and follow the
+The JSON goes to stdout; add `--out <file>` only when a task needs the report as a file. If `tessri` is not on
+PATH, try `python3 -m tessri ...`; if that fails too, the capability is unavailable: say so and follow the
 project's policy, and do not install or download anything to make a routine query work.
 Use `--format json` for structured query results; default text/Markdown is for reading. `scan` also supports
 `--format html --out report.html` for a self-contained overview with the module graph and an impact explorer.
@@ -43,8 +78,8 @@ and `ownership` for who maintains what.
 ## Dependencies and blast radius
 
 ```bash
-repolife graph . --format json
-repolife impact <file-or-directory> --format json
+tessri graph . --format json
+tessri impact <file-or-directory> --format json
 ```
 
 `graph` rolls the import graph up into modules (directories, split by size; `--module-depth N` fixes the
@@ -61,7 +96,7 @@ packages, supported dynamic patterns, string references and unclassified plugin 
 `edges.references` shows counted, capped examples of inferred or unknown edges. These describe the frontier
 visited, not every such edge in the repository.
 
-When a review question needs the import-based view, use `repolife impact <path> --edges imports --format json`.
+When a review question needs the import-based view, use `tessri impact <path> --edges imports --format json`.
 It keeps recognized dependency syntax and Python parent packages: importing `a.b.c` can run `a/__init__.py`.
 It excludes string, computed/glob and unknown edges; `edges.excluded` and `edges.unclassified` disclose those
 encountered. Evidence labels describe syntax, not execution: Python literal `import_module("pkg.mod")` currently
@@ -80,7 +115,7 @@ can remain invisible under either policy.
 ## Triage a change
 
 ```bash
-repolife triage --since <base> --format json     # a branch against its base; without --since, uncommitted work
+tessri triage --since <base> --format json     # a branch against its base; without --since, uncommitted work
 ```
 
 Run it before you open a change and before you review one. `files` is the changed code, most active first: files
@@ -96,7 +131,7 @@ prompt about where to look, not a verdict.
 ## Check a change's structure
 
 ```bash
-repolife check --since <base> --format json --fail-on never     # without --since, uncommitted work
+tessri check --since <base> --format json --fail-on never     # without --since, uncommitted work
 ```
 
 Run it when a task is done and before the change is opened. It compares the base of the change with the working
@@ -124,7 +159,7 @@ changing the code, not who is accountable, and git cannot tell who reviewed.
   stop. `ownership.codeowners` compares CODEOWNERS with the commit history (`uncovered_files`, `differing_files`).
 - Orphan rows carry `owner` and `owner_idle_days`: that is who to ask before deleting. An owner who
   is gone is a reason to be careful, not permission to delete.
-- To find who to ask about a path, use `repolife why <path>`: its `owners:` line lists who maintains it
+- To find who to ask about a path, use `tessri why <path>`: its `owners:` line lists who maintains it
   and marks anyone who has gone silent.
 - Authors are matched by name; a `.mailmap` fixes merged or split people. Bots are ignored.
 
@@ -155,12 +190,12 @@ cannot see that.
 
 1. Start with orphan files whose `confidence` is `high`. `medium` and `low` carry a reason in
    `notes` (recently modified, mentioned in docs, lives under `scripts/`); show those to a human first.
-2. For each candidate run `repolife why <path>`. It shows who depends on the file, what config names
+2. For each candidate run `tessri why <path>`. It shows who depends on the file, what config names
    it, and what else would be stranded by deleting it.
 3. Search the repository yourself for the module name and its public symbols: a static scan can miss string
    lookups, registries and entry points, and cannot see consumers outside this repository.
 4. If it is really unused, delete it in a small change (one cluster of related files per change)
-   and run the tests. If it is intentionally kept, add it to `keep` in `.repolife.toml` with a comment.
+   and run the tests. If it is intentionally kept, add it to `keep` in `.tessri.toml` with a comment.
 5. For `test_only_files`, ask whether production code lost its caller. Do not delete tests to make
    the number go down.
 
@@ -169,3 +204,56 @@ cannot see that.
 - Delete anything from a single scan without step 2 and step 3.
 - Treat DORMANT or low activity as proof that code is unused. Reachability supplies cleanup candidates within its coverage.
 - Remove files a library exports to its users; list them under `keep` instead.
+"""
+
+AGENTS_BLOCK = """\
+## Repository health (Tessri)
+
+Choose repository evidence for the task: `tessri impact <path>` for a file or directory change,
+`tessri triage --since <base>` for review attention, `tessri check --since <base>` for structural effects,
+and `tessri scan . --format json` with `tessri graph` for orientation or cleanup. Use the project's base
+and gate policy; a full scan is not required for every edit.
+
+Impact's default includes imports, parent packages and inferred references. Its `edges` data explains the
+sources and compares import-only counts; use `--edges imports` when that narrower view answers the question.
+It retains Python parent packages, but excludes string, dynamic and unknown evidence. Keep the broad evidence
+and analysis limits visible. Candidate tests are paths to map to the project's runner, not execution records
+or a complete test plan; retain required checks and report what actually ran. Maintenance history suggests
+review context, not an assignment.
+
+Before deleting a cleanup candidate, use `tessri why <path>` and a repository-wide search. Static analysis
+can miss runtime wiring and external consumers; activity alone does not establish disuse. Files intentionally
+kept can go under `keep` in `.tessri.toml`. Delete in small changes and run the project's tests.
+"""
+
+GITHUB_WORKFLOW = """\
+name: tessri
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1"
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # activity needs full git history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install "__INSTALL_SPEC__"
+      - name: Scan
+        run: |
+          tessri scan . --format json --out tessri-report.json
+          tessri scan . --format html --out tessri-report.html
+          tessri scan . | tee -a "$GITHUB_STEP_SUMMARY" > /dev/null
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tessri-report
+          path: |
+            tessri-report.json
+            tessri-report.html
+"""

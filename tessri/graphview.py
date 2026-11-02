@@ -126,7 +126,7 @@ def _q(text: str) -> str:
 def dot(graph: dict, min_imports: int | None = None) -> str:
     modules, edges, floor = drawn(graph, min_imports)
     out = [
-        "digraph repolife {",
+        "digraph tessri {",
         f"  // {len(edges)} of {len(graph['edges'])} dependencies drawn (at least {_many(floor, 'import')}); red ones are the cuts that break a cycle",
         "  rankdir=LR;",
         '  node [shape=box, fontname="Helvetica"];',

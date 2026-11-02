@@ -7,10 +7,10 @@ from datetime import datetime, timezone
 from unittest import mock
 
 from helpers import TempRepo, git
-from repolife import config, gitlog, review
-from repolife.analyze import analyze
-from repolife.render import markdown
-from repolife.report import build_report
+from tessri import config, gitlog, review
+from tessri.analyze import analyze
+from tessri.render import markdown
+from tessri.report import build_report
 from test_htmlreport import page_for, parse
 from test_modules import run_cli
 
@@ -307,10 +307,10 @@ class SwitchesTest(Churn):
 
     def test_the_config_file_sets_the_window(self):
         self.commit(ALICE, 100, new={"a.py": 3})
-        (self.root / ".repolife.toml").write_text("review_days = 7\n")
+        (self.root / ".tessri.toml").write_text("review_days = 7\n")
         self.assertEqual(config.load(self.root).review_days, 7)
         self.assertEqual(self.review()["days"], 7)
-        (self.root / ".repolife.toml").write_text("review_days = -1\n")
+        (self.root / ".tessri.toml").write_text("review_days = -1\n")
         with self.assertRaises(config.ConfigError):
             config.load(self.root)
 

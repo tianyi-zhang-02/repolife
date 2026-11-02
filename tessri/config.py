@@ -1,4 +1,4 @@
-"""Configuration: `.repolife.toml`, or `[tool.repolife]` in pyproject.toml. CLI flags extend or override."""
+"""Configuration: `.tessri.toml`, or `[tool.tessri]` in pyproject.toml. CLI flags extend or override."""
 
 from __future__ import annotations
 
@@ -53,10 +53,10 @@ def load(root: Path) -> Config:
     cfg = Config()
     pyproject = root / "pyproject.toml"
     if pyproject.is_file():
-        section = _read(pyproject).get("tool", {}).get("repolife")
+        section = _read(pyproject).get("tool", {}).get("tessri")
         if section:
-            _apply(cfg, section, f"{pyproject.name} [tool.repolife]")
-    dotfile = root / ".repolife.toml"
+            _apply(cfg, section, f"{pyproject.name} [tool.tessri]")
+    dotfile = root / ".tessri.toml"
     if dotfile.is_file():
         _apply(cfg, _read(dotfile), dotfile.name)
     return cfg

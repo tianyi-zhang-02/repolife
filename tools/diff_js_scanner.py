@@ -1,4 +1,4 @@
-"""Differential test for the JS/TS scanner: compare the module specifiers repolife finds with the TypeScript compiler's.
+"""Differential test for the JS/TS scanner: compare the module specifiers tessri finds with the TypeScript compiler's.
 
 The scanner reads imports without a parser, so the only way to trust it is to check it against one.
 Point it at any directory of real code (a `node_modules` is ideal) and at a TypeScript install:
@@ -21,7 +21,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from repolife.analyzers.jslex import scan  # noqa: E402
+from tessri.analyzers.jslex import scan  # noqa: E402
 
 EXTS = {".js", ".mjs", ".cjs", ".ts", ".tsx", ".jsx", ".mts", ".cts"}
 

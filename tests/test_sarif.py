@@ -1,4 +1,4 @@
-"""`repolife check --format sarif`: one finding, one result, in order; file-level locations or none; nothing invented."""
+"""`tessri check --format sarif`: one finding, one result, in order; file-level locations or none; nothing invented."""
 
 import contextlib
 import io
@@ -9,9 +9,9 @@ from pathlib import Path
 
 from helpers import TempRepo, git, write_tree
 
-from repolife import __version__, sarifview
-from repolife.cli import main
-from repolife.sarifview import INFORMATIONAL, ROOT_ID, RULES, sarif
+from tessri import __version__, sarifview
+from tessri.cli import main
+from tessri.sarifview import INFORMATIONAL, ROOT_ID, RULES, sarif
 
 FINDINGS = [
     {"id": "dangling-import:pkg/gone.py", "kind": "dangling-import", "severity": "block", "title": "`pkg/gone.py` was deleted but is still imported", "detail": "Imported by 1 file the change did not touch.", "files": ["pkg/user.py"], "action": "Restore it or update the importers.", "needs_human": False},
@@ -43,23 +43,23 @@ class MappingTest(unittest.TestCase):
     def test_document_shape(self):
         self.assertEqual((self.log["$schema"], self.log["version"], len(self.log["runs"])), (sarifview.SCHEMA, "2.1.0", 1))
         driver = self.run["tool"]["driver"]
-        self.assertEqual((driver["name"], driver["version"]), ("repolife", __version__))
-        self.assertEqual([r["id"] for r in driver["rules"]], [f"repolife/{kind}" for kind, _, _ in RULES])
+        self.assertEqual((driver["name"], driver["version"]), ("tessri", __version__))
+        self.assertEqual([r["id"] for r in driver["rules"]], [f"tessri/{kind}" for kind, _, _ in RULES])
         self.assertNotIn("invocations", self.run)
         self.assertNotIn("automationDetails", self.run)
         json.dumps(self.log)  # serialisable
 
     def test_one_result_per_finding_in_order(self):
         results = self.run["results"]
-        self.assertEqual([r["properties"]["repolife/finding"]["id"] for r in results], [f["id"] for f in FINDINGS])
+        self.assertEqual([r["properties"]["tessri/finding"]["id"] for r in results], [f["id"] for f in FINDINGS])
         for r in results:
             self.assertEqual(self.run["tool"]["driver"]["rules"][r["ruleIndex"]]["id"], r["ruleId"])
-            self.assertEqual(r["ruleId"], "repolife/" + r["properties"]["repolife/finding"]["kind"])
+            self.assertEqual(r["ruleId"], "tessri/" + r["properties"]["tessri/finding"]["kind"])
             self.assertNotIn("partialFingerprints", r)
             self.assertNotIn("fingerprints", r)
 
     def test_kinds_and_levels(self):
-        by = {r["properties"]["repolife/finding"]["kind"]: (r["kind"], r["level"]) for r in self.run["results"]}
+        by = {r["properties"]["tessri/finding"]["kind"]: (r["kind"], r["level"]) for r in self.run["results"]}
         self.assertEqual(by["dangling-import"], ("fail", "error"))
         self.assertEqual(by["new-orphan"], ("fail", "warning"))
         self.assertEqual(by["no-active-owner"], ("fail", "warning"))
@@ -78,7 +78,7 @@ class MappingTest(unittest.TestCase):
         related = orphan["relatedLocations"]
         self.assertEqual([(r["id"], r["physicalLocation"]["artifactLocation"]["uri"]) for r in related], [(1, "weird%5Cname.py")])  # ../, absolute, deleted and the duplicate are left out
         self.assertTrue(all("region" not in loc["physicalLocation"] for loc in [*orphan["locations"], *related]))
-        self.assertEqual(orphan["properties"]["repolife/finding"]["files"], FINDINGS[1]["files"])  # the evidence keeps every path
+        self.assertEqual(orphan["properties"]["tessri/finding"]["files"], FINDINGS[1]["files"])  # the evidence keeps every path
 
     def test_posix_colon_names_are_kept_and_drive_paths_are_not(self):
         finding = dict(FINDINGS[1], files=["C:/x.py", "c:\\x.py", "a:valid.py", "C:", "dir/b:c.py", "new\nline.py"])
@@ -91,7 +91,7 @@ class MappingTest(unittest.TestCase):
         for r in (cycle, resolved):
             self.assertNotIn("locations", r)
             self.assertNotIn("relatedLocations", r)
-        self.assertEqual(resolved["properties"]["repolife/finding"]["files"], ["pkg/gone.py"])  # deleted: evidence only
+        self.assertEqual(resolved["properties"]["tessri/finding"]["files"], ["pkg/gone.py"])  # deleted: evidence only
 
     def test_dangling_import_points_at_the_importer(self):
         self.assertEqual(self.run["results"][0]["locations"][0]["physicalLocation"]["artifactLocation"]["uri"], "pkg/user.py")
@@ -103,14 +103,14 @@ class MappingTest(unittest.TestCase):
         self.assertNotIn(" ", uri)
 
     def test_run_properties_keep_the_check_identity(self):
-        props = self.run["properties"]["repolife/check"]
+        props = self.run["properties"]["tessri/check"]
         self.assertEqual(sorted(props), ["change", "kind", "meta", "notes", "schema_version", "summary"])
         self.assertEqual(props["meta"]["git"]["head"], "a" * 40)
         self.assertEqual(props["notes"], ["Static imports only."])
 
     def test_locationless_findings_are_kept_and_counted_by_default(self):
         # the new cycle (no example file), the resolved orphan (its only file is deleted) and the resolved cycle
-        self.assertEqual(self.run["properties"]["repolife/locationless"], {"policy": "keep", "count": 3, "omitted": []})
+        self.assertEqual(self.run["properties"]["tessri/locationless"], {"policy": "keep", "count": 3, "omitted": []})
         self.assertEqual(len(self.run["results"]), len(FINDINGS))
 
     def test_omit_moves_locationless_findings_whole_into_the_run_properties(self):
@@ -118,10 +118,10 @@ class MappingTest(unittest.TestCase):
         kept = [r for r in self.run["results"] if "locations" in r]
         self.assertEqual(run["results"], kept)  # same results, same order, only the location-free ones gone
         self.assertTrue(all("locations" in r for r in run["results"]))
-        gone = run["properties"]["repolife/locationless"]
+        gone = run["properties"]["tessri/locationless"]
         self.assertEqual((gone["policy"], gone["count"]), ("omit", 3))
         self.assertEqual(gone["omitted"], [FINDINGS[2], FINDINGS[5], FINDINGS[6]])  # the whole finding, not a summary of it
-        self.assertEqual(run["properties"]["repolife/check"], self.run["properties"]["repolife/check"])  # the check mirror is untouched
+        self.assertEqual(run["properties"]["tessri/check"], self.run["properties"]["tessri/check"])  # the check mirror is untouched
         json.dumps(run)
 
     def test_unknown_locationless_policy_is_refused(self):
@@ -159,12 +159,12 @@ class CliTest(TempRepo):
         self.assertEqual(code, 0)
         log = json.loads(out)
         run = log["runs"][0]
-        kinds = [r["properties"]["repolife/finding"]["kind"] for r in run["results"]]
+        kinds = [r["properties"]["tessri/finding"]["kind"] for r in run["results"]]
         self.assertIn("dangling-import", kinds)
         dangling = run["results"][kinds.index("dangling-import")]
         self.assertEqual((dangling["level"], dangling["locations"][0]["physicalLocation"]["artifactLocation"]["uri"]), ("error", "pkg/a.py"))
         self.assertEqual(run["originalUriBaseIds"][ROOT_ID]["uri"], self.root.as_uri() + "/")
-        self.assertEqual(run["properties"]["repolife/check"]["meta"]["analysis"], {"structure": "complete", "reason": None})
+        self.assertEqual(run["properties"]["tessri/check"]["meta"]["analysis"], {"structure": "complete", "reason": None})
         code, gated, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "sarif", "--fail-on", "block")
         self.assertEqual(code, 1)
         self.assertEqual(json.loads(gated)["runs"][0]["results"], run["results"])  # the gate changes the exit code, not the document
@@ -173,7 +173,7 @@ class CliTest(TempRepo):
         _, as_json, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "json")
         _, as_sarif, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "sarif")
         findings = json.loads(as_json)["findings"]
-        self.assertEqual([r["properties"]["repolife/finding"] for r in json.loads(as_sarif)["runs"][0]["results"]], findings)
+        self.assertEqual([r["properties"]["tessri/finding"] for r in json.loads(as_sarif)["runs"][0]["results"]], findings)
 
     def test_out_file_and_errors(self):
         target = self.root.parent / (self.root.name + "-reports") / "check.sarif"
@@ -192,7 +192,7 @@ class CliTest(TempRepo):
         self.assertEqual(code, 0)
         run = json.loads(out)["runs"][0]
         self.assertEqual(run["results"], [])
-        self.assertEqual(run["properties"]["repolife/check"]["meta"]["analysis"], {"structure": "skipped", "reason": "no-code-changes"})
+        self.assertEqual(run["properties"]["tessri/check"]["meta"]["analysis"], {"structure": "skipped", "reason": "no-code-changes"})
 
     def test_nested_root_is_declared_as_the_root(self):
         code, out, _ = run_cli("check", "--repo", str(self.root / "pkg"), "--since", "main", "--format", "sarif")
@@ -211,9 +211,9 @@ class CliTest(TempRepo):
         run = json.loads(out)["runs"][0]
         self.assertTrue(all("locations" in r for r in run["results"]))
         self.assertEqual(run["results"], [r for r in kept["results"] if "locations" in r])
-        without = [r["properties"]["repolife/finding"] for r in kept["results"] if "locations" not in r]
-        self.assertEqual(kept["properties"]["repolife/locationless"], {"policy": "keep", "count": len(without), "omitted": []})
-        self.assertEqual(run["properties"]["repolife/locationless"], {"policy": "omit", "count": len(without), "omitted": without})
+        without = [r["properties"]["tessri/finding"] for r in kept["results"] if "locations" not in r]
+        self.assertEqual(kept["properties"]["tessri/locationless"], {"policy": "keep", "count": len(without), "omitted": []})
+        self.assertEqual(run["properties"]["tessri/locationless"], {"policy": "omit", "count": len(without), "omitted": without})
         code, gated, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "sarif", "--locationless", "omit", "--fail-on", "block")
         self.assertEqual(code, 1)  # the block finding is located, and the gate would count it even if it were not
         self.assertEqual(json.loads(gated)["runs"][0]["results"], run["results"])

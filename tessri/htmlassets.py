@@ -265,12 +265,12 @@ footer { font-size: 11px; }
 }
 """
 
-THEME_BOOT = """try{var t=localStorage.getItem('repolife-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}"""
+THEME_BOOT = """try{var t=localStorage.getItem('tessri-theme');if(t==='light'||t==='dark')document.documentElement.dataset.theme=t;}catch(e){}"""
 
 JS = r"""(function () {
 'use strict';
 
-// ---- impact: the same walk `repolife impact` does, over the data embedded in the page --------------------
+// ---- impact: the same walk `tessri impact` does, over the data embedded in the page --------------------
 
 function norm(name) {
   name = String(name).trim();
@@ -436,7 +436,7 @@ function impactFragment(path, edges, hops) {
 }
 
 const root = typeof globalThis !== 'undefined' ? globalThis : window;
-root.RepolifeCore = {resolve, impactOf, parseFragment, impactFragment};
+root.TessriCore = {resolve, impactOf, parseFragment, impactFragment};
 if (typeof document === 'undefined') return;
 
 // ---- page ------------------------------------------------------------------------------------------------
@@ -458,14 +458,14 @@ function el(tag, props, ...kids) {
 // theme
 const themeButton = $('#theme');
 let mode = 'auto';
-try { mode = localStorage.getItem('repolife-theme') || 'auto'; } catch (e) { /* storage may be blocked */ }
+try { mode = localStorage.getItem('tessri-theme') || 'auto'; } catch (e) { /* storage may be blocked */ }
 function applyTheme() {
   if (mode === 'auto') delete document.documentElement.dataset.theme; else document.documentElement.dataset.theme = mode;
   themeButton.textContent = 'Theme: ' + mode;
 }
 themeButton.addEventListener('click', () => {
   mode = {auto: 'light', light: 'dark', dark: 'auto'}[mode] || 'auto';
-  try { localStorage.setItem('repolife-theme', mode); } catch (e) { /* ignore */ }
+  try { localStorage.setItem('tessri-theme', mode); } catch (e) { /* ignore */ }
   applyTheme();
 });
 applyTheme();

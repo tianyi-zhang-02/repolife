@@ -1,6 +1,6 @@
 """What a change did to the map of the repository.
 
-`repolife scan` describes a repository as it is. This compares two states of it, the point where a branch left
+`tessri scan` describes a repository as it is. This compares two states of it, the point where a branch left
 its base and the working tree now, and reports what the change altered in structure: files nothing reaches any
 more, modules that now depend on each other, imports of files the change deleted, and changed code that nobody
 active maintains. It is meant for the moment an agent (or a person) finishes a task, before the change is merged.
@@ -177,7 +177,7 @@ def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, tuple[int, in
             _finding(
                 "new-orphan", "warn" if len(by_hand) < len(added) else "info", "added", f"{len(added)} new file{'s' if len(added) != 1 else ''} that nothing reaches",
                 detail, [r["path"] for r in added][:LISTED],
-                "Import them from where they are meant to be used, add a test that does, or drop them. `repolife why <file>` shows the evidence.",
+                "Import them from where they are meant to be used, add a test that does, or drop them. `tessri why <file>` shows the evidence.",
             )
         )
     if stranded:
@@ -272,7 +272,7 @@ def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, tuple[int, in
             _finding(
                 "no-active-owner", "warn", "changed", f"{len(unowned)} changed file{'s' if len(unowned) != 1 else ''} nobody active maintains",
                 f"Nobody who maintained these files has committed anywhere in the last {gone} days, so nobody who knows them is likely to look at the change.",
-                [r["path"] for r in unowned][:LISTED], "Have a human who knows the code look before merging, or assign an owner; the last maintainers are listed with `repolife why <file>`.",
+                [r["path"] for r in unowned][:LISTED], "Have a human who knows the code look before merging, or assign an owner; the last maintainers are listed with `tessri why <file>`.",
                 needs_human=True,
             )
         )
@@ -316,7 +316,7 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
     change_ids = {"since": since, "base": base, "head": head, "uncommitted": dirty}
     result: dict = {
         "schema_version": SCHEMA_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "generated_at": datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": root.name},
         "kind": "change-check",
@@ -340,7 +340,7 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
         result["summary"]["findings"] = {s: 0 for s in SEVERITIES}
         return result
     quiet = dataclasses.replace(cfg, review_days=0)
-    with tempfile.TemporaryDirectory(prefix="repolife-base-") as scratch:
+    with tempfile.TemporaryDirectory(prefix="tessri-base-") as scratch:
         extract_tree(root, base, prefix, Path(scratch), skip)
         base_a = analyze(Path(scratch), quiet, now=now)
     head_a = analyze(root, quiet, now=now, rev=base)

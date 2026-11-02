@@ -1,4 +1,4 @@
-"""Command line entry point: `repolife scan | why | graph | impact | triage | check | init`."""
+"""Command line entry point: `tessri scan | why | graph | impact | triage | check | init`."""
 
 from __future__ import annotations
 
@@ -14,8 +14,8 @@ from .render import markdown
 from .report import build_report
 from .triage import TriageError, compute as triage_compute, markdown as triage_markdown
 
-# Not on PyPI yet: a bare `repolife` would install whatever package owns that name there.
-DEFAULT_INSTALL_SPEC = "git+https://github.com/tianyi-zhang-02/repolife"
+# Not on PyPI yet: a bare `tessri` would install whatever package owns that name there.
+DEFAULT_INSTALL_SPEC = "git+https://github.com/tianyi-zhang-02/tessri"
 
 
 def _add_analysis_options(p: argparse.ArgumentParser) -> None:
@@ -60,7 +60,7 @@ def _config_for(root: Path, args: argparse.Namespace) -> config.Config:
 def _root(path: str) -> Path:
     root = Path(path).expanduser()
     if not root.is_dir():
-        raise SystemExit(f"repolife: {path}: not a directory")
+        raise SystemExit(f"tessri: {path}: not a directory")
     return root.resolve()
 
 
@@ -69,7 +69,7 @@ def _emit(text: str, out_path: str | None) -> None:
         out = Path(out_path)
         out.parent.mkdir(parents=True, exist_ok=True)
         out.write_text(text, encoding="utf-8")
-        print(f"repolife: wrote {out}", file=sys.stderr)
+        print(f"tessri: wrote {out}", file=sys.stderr)
     else:
         sys.stdout.write(text)
 
@@ -94,7 +94,7 @@ def _cmd_why(args: argparse.Namespace) -> int:
     try:
         text = json.dumps(why_json(analysis, args.target), indent=2) + "\n" if args.format == "json" else explain(analysis, args.target) + "\n"
     except TargetError as exc:
-        print(f"repolife: {exc}", file=sys.stderr)
+        print(f"tessri: {exc}", file=sys.stderr)
         return 2
     _emit(text, args.out)
     return 0
@@ -103,7 +103,7 @@ def _cmd_why(args: argparse.Namespace) -> int:
 def _cmd_graph(args: argparse.Namespace) -> int:
     root = _root(args.path)
     if args.level == "file" and args.format != "json":
-        print("repolife: --level file is only available as --format json (a file-level picture is too large to read)", file=sys.stderr)
+        print("tessri: --level file is only available as --format json (a file-level picture is too large to read)", file=sys.stderr)
         return 2
     graph = modules.build_graph(analyze(root, _config_for(root, args)), args.module_depth, args.include_tests, args.level)
     if args.format == "json":
@@ -124,7 +124,7 @@ def _cmd_triage(args: argparse.Namespace) -> int:
     try:
         result = triage_compute(root, cfg, args.since)
     except TriageError as exc:
-        print(f"repolife: {exc}", file=sys.stderr)
+        print(f"tessri: {exc}", file=sys.stderr)
         return 2
     _emit(json.dumps(result, indent=2) + "\n" if args.format == "json" else triage_markdown(result, args.limit, cfg.active_days), args.out)
     return 0
@@ -133,12 +133,12 @@ def _cmd_triage(args: argparse.Namespace) -> int:
 def _cmd_check(args: argparse.Namespace) -> int:
     root = _root(args.repo)
     if args.locationless != "keep" and args.format != "sarif":
-        print("repolife: --locationless applies to --format sarif only", file=sys.stderr)
+        print("tessri: --locationless applies to --format sarif only", file=sys.stderr)
         return 2
     try:
         result = since.check(root, _config_for(root, args), args.since)
     except since.CheckError as exc:
-        print(f"repolife: {exc}", file=sys.stderr)
+        print(f"tessri: {exc}", file=sys.stderr)
         return 2
     if args.format == "sarif":
         text = json.dumps(sarifview.sarif(result, root, args.locationless), indent=2) + "\n"
@@ -156,7 +156,7 @@ def _cmd_impact(args: argparse.Namespace) -> int:
     try:
         found = modules.impact(analysis, args.target, args.module_depth, hops=args.hops, edges=args.edges)
     except TargetError as exc:
-        print(f"repolife: {exc}", file=sys.stderr)
+        print(f"tessri: {exc}", file=sys.stderr)
         return 2
     _emit(json.dumps(found, indent=2) + "\n" if args.format == "json" else graphview.impact_text(found), args.out)
     return 0
@@ -172,28 +172,28 @@ def _cmd_init(args: argparse.Namespace) -> int:
     for act in actions:
         verb = dry.get(act.verb, act.verb) if args.dry_run else act.verb
         print(f"{verb:<13} {act.path}")
-    print("\nNext: run `repolife scan .` to see the first report." if not args.dry_run else "\nDry run: nothing was written.")
+    print("\nNext: run `tessri scan .` to see the first report." if not args.dry_run else "\nDry run: nothing was written.")
     return 0
 
 
 def _cmd_integration(args: argparse.Namespace) -> int:
     root = Path(args.path).expanduser()
     if not root.is_dir():
-        print(f"repolife: {args.path}: not a directory", file=sys.stderr)
+        print(f"tessri: {args.path}: not a directory", file=sys.stderr)
         return 2
     root = root.resolve()
     try:
         doc = integration.status(root) if args.op == "status" else integration.run(root, args.op, args.agent, dry_run=args.dry_run)
     except integration.IntegrationError as exc:
-        print(f"repolife: {exc}", file=sys.stderr)
+        print(f"tessri: {exc}", file=sys.stderr)
         return 2
     _emit(json.dumps(doc, indent=2) + "\n" if args.format == "json" else integration.text(doc), None)
     return 1 if doc.get("conflicts") else 0
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="repolife", description="Which parts of a repository are alive? Volume, git activity and reachability in one report.")
-    parser.add_argument("--version", action="version", version=f"repolife {__version__}")
+    parser = argparse.ArgumentParser(prog="tessri", description="Tessri: keep code understandable. How a codebase fits together, what a change can reach, who is able to review it and what nobody maintains, from code and git history, with the evidence for every claim.")
+    parser.add_argument("--version", action="version", version=f"tessri {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     scan = sub.add_parser("scan", help="analyse a repository and print the report")
@@ -256,12 +256,12 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analysis_options(check)
     check.set_defaults(func=_cmd_check)
 
-    init = sub.add_parser("init", help="mount repolife into a repository: config, agent skill, AGENTS.md block, optional CI")
+    init = sub.add_parser("init", help="mount Tessri into a repository: config, agent skill, AGENTS.md block, optional CI")
     init.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
     init.add_argument("--agent", choices=("claude", "agents", "all", "none"), default="all", help="which agent integrations to write (default: all)")
     init.add_argument("--ci", choices=("none", "github"), default="none", help="also write a CI workflow (default: none)")
     init.add_argument("--install-spec", default=DEFAULT_INSTALL_SPEC, metavar="SPEC", help=f"what `pip install` should receive in generated files (default: {DEFAULT_INSTALL_SPEC})")
-    init.add_argument("--force", action="store_true", help="overwrite files repolife would otherwise leave alone")
+    init.add_argument("--force", action="store_true", help="overwrite files Tessri would otherwise leave alone")
     init.add_argument("--dry-run", action="store_true", help="show what would change without writing")
     init.set_defaults(func=_cmd_init)
 
@@ -288,7 +288,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         return args.func(args)
     except config.ConfigError as exc:
-        print(f"repolife: {exc}", file=sys.stderr)
+        print(f"tessri: {exc}", file=sys.stderr)
         return 2
     except BrokenPipeError:
         return 0

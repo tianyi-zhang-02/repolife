@@ -6,13 +6,13 @@ import unittest
 from pathlib import Path
 
 from helpers import TempRepo, git, write_tree
-from repolife import config, inventory, templates
-from repolife.analyze import analyze
-from repolife.cli import DEFAULT_INSTALL_SPEC, main
-from repolife.explain import TargetError, explain
-from repolife.model import SCHEMA_VERSION
-from repolife.mount import BEGIN, END, mount
-from repolife.report import build_report
+from tessri import config, inventory, templates
+from tessri.analyze import analyze
+from tessri.cli import DEFAULT_INSTALL_SPEC, main
+from tessri.explain import TargetError, explain
+from tessri.model import SCHEMA_VERSION
+from tessri.mount import BEGIN, END, mount
+from tessri.report import build_report
 
 TREE = {
     "pkg/__init__.py": "",
@@ -35,7 +35,7 @@ TREE = {
     "conf/plugins.yaml": "plugin:\n  _target_: pkg.plugin_a.Plugin\n",
     "pyrefly.toml": 'project-includes = ["pkg/dead.py", "pkg/dead_dep.py"]\n',
     "docs/guide.md": "See pkg.dead for details.\n",
-    "pyproject.toml": '[project]\nname = "demo"\nversion = "0"\n[project.scripts]\ncli = "pkg.cli:main"\n[tool.repolife]\nkeep = ["pkg/api.py"]\n',
+    "pyproject.toml": '[project]\nname = "demo"\nversion = "0"\n[project.scripts]\ncli = "pkg.cli:main"\n[tool.tessri]\nkeep = ["pkg/api.py"]\n',
     "lib/x.go": "package lib\n",
 }
 
@@ -177,10 +177,10 @@ class ReportAndCliTest(TempRepo):
         code, out = self.run_cli("scan", str(self.root), "--format", "json", "--keep", "pkg/dyn/z.py")
         rep = json.loads(out)
         self.assertNotIn("pkg/dyn/z.py", [o["path"] for o in rep["cleanup"]["orphan_files"]])
-        self.assertIn("pkg/api.py", rep["settings"]["keep"])  # from pyproject [tool.repolife]
+        self.assertIn("pkg/api.py", rep["settings"]["keep"])  # from pyproject [tool.tessri]
 
     def test_bad_config_is_a_clean_error(self):
-        (self.root / ".repolife.toml").write_text("bogus = 1\n")
+        (self.root / ".tessri.toml").write_text("bogus = 1\n")
         err = io.StringIO()
         with contextlib.redirect_stderr(err):
             code = main(["scan", str(self.root)])
@@ -200,43 +200,43 @@ class MountTest(TempRepo):
         (self.root / "AGENTS.md").write_text("# Agents\n\nExisting guidance.\n")
         (self.root / ".gitignore").write_text("node_modules/\n")
 
-        first = {a.path: a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/repolife", False, False)}
-        self.assertEqual(first[".repolife.toml"], "created")
+        first = {a.path: a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/tessri", False, False)}
+        self.assertEqual(first[".tessri.toml"], "created")
         self.assertEqual(first["AGENTS.md"], "updated")
         agents = (self.root / "AGENTS.md").read_text()
         self.assertTrue(agents.startswith("# Agents\n\nExisting guidance."))
         self.assertEqual(agents.count(BEGIN), 1)
-        self.assertIn("git+https://example.com/repolife", (self.root / ".github/workflows/repolife.yml").read_text())
-        self.assertEqual((self.root / ".gitignore").read_text(), "node_modules/\n.repolife/\n")
+        self.assertIn("git+https://example.com/tessri", (self.root / ".github/workflows/tessri.yml").read_text())
+        self.assertEqual((self.root / ".gitignore").read_text(), "node_modules/\n.tessri/\n")
 
-        second = {a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/repolife", False, False)}
+        second = {a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/tessri", False, False)}
         self.assertEqual(second, {"unchanged"})
 
     def test_ci_workflow_installs_from_the_repository_by_default(self):
         with contextlib.redirect_stdout(io.StringIO()):
             self.assertEqual(main(["init", str(self.root), "--ci", "github"]), 0)
-        workflow = (self.root / ".github/workflows/repolife.yml").read_text()
+        workflow = (self.root / ".github/workflows/tessri.yml").read_text()
         self.assertNotIn("__INSTALL_SPEC__", workflow)
         self.assertIn(f'pip install "{DEFAULT_INSTALL_SPEC}"', workflow)
 
     def test_edited_files_are_left_alone_unless_forced(self):
-        mount(self.root, {"claude"}, None, "repolife")
-        skill = self.root / ".claude/skills/repolife/SKILL.md"
+        mount(self.root, {"claude"}, None, "tessri")
+        skill = self.root / ".claude/skills/tessri/SKILL.md"
         skill.write_text("my edits\n")
-        self.assertEqual({a.path: a.verb for a in mount(self.root, {"claude"}, None, "repolife")}[".claude/skills/repolife/SKILL.md"], "skipped")
+        self.assertEqual({a.path: a.verb for a in mount(self.root, {"claude"}, None, "tessri")}[".claude/skills/tessri/SKILL.md"], "skipped")
         self.assertEqual(skill.read_text(), "my edits\n")
-        mount(self.root, {"claude"}, None, "repolife", force=True)
+        mount(self.root, {"claude"}, None, "tessri", force=True)
         self.assertEqual(skill.read_text(), templates.SKILL)
 
     def test_marked_block_is_updated_in_place(self):
         (self.root / "AGENTS.md").write_text(f"top\n{BEGIN}\nstale\n{END}\nbottom\n")
-        mount(self.root, {"agents"}, None, "repolife")
+        mount(self.root, {"agents"}, None, "tessri")
         text = (self.root / "AGENTS.md").read_text()
         self.assertTrue(text.startswith("top\n") and text.endswith("\nbottom\n"))
         self.assertNotIn("stale", text)
 
     def test_dry_run_writes_nothing(self):
-        actions = mount(self.root, {"claude", "agents"}, "github", "repolife", dry_run=True)
+        actions = mount(self.root, {"claude", "agents"}, "github", "tessri", dry_run=True)
         self.assertTrue(actions)
         self.assertEqual(list(self.root.iterdir()), [])
 
@@ -244,7 +244,7 @@ class MountTest(TempRepo):
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(main(["init", str(self.root), "--agent", "none"]), 0)
-        self.assertTrue((self.root / ".repolife.toml").exists())
+        self.assertTrue((self.root / ".tessri.toml").exists())
         out = io.StringIO()
         with contextlib.redirect_stdout(out):
             self.assertEqual(main(["scan", str(self.root), "--format", "json"]), 0)
@@ -253,7 +253,7 @@ class MountTest(TempRepo):
 
 class PluginFilesTest(unittest.TestCase):
     def test_bundled_skill_matches_template(self):
-        bundled = Path(__file__).resolve().parent.parent / "skills/repolife/SKILL.md"
+        bundled = Path(__file__).resolve().parent.parent / "skills/tessri/SKILL.md"
         self.assertEqual(bundled.read_text(), templates.SKILL)
 
 

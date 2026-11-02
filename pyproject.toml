@@ -3,14 +3,14 @@ requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "repolife"
-version = "0.1.0"
-description = "Which parts of a repository are alive? Volume, git activity and reachability in one report, built for coding agents."
+name = "tessri"
+version = "0.2.0"
+description = "Keep code understandable. How a codebase fits together, what a change can reach, who can review it and what nobody maintains, with the evidence for every claim. Zero dependencies."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "MIT" }
 authors = [{ name = "Tianyi Zhang" }]
-keywords = ["dead-code", "maintainability", "code-health", "ai-agents", "claude-code", "mcp"]
+keywords = ["maintainability", "code-review", "dependency-graph", "dead-code", "code-ownership", "coding-agents", "claude-code", "codex", "sarif"]
 classifiers = [
   "Development Status :: 3 - Alpha",
   "Intended Audience :: Developers",
@@ -21,11 +21,11 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Homepage = "https://github.com/tianyi-zhang-02/repolife"
-Issues = "https://github.com/tianyi-zhang-02/repolife/issues"
+Homepage = "https://github.com/tianyi-zhang-02/tessri"
+Issues = "https://github.com/tianyi-zhang-02/tessri/issues"
 
 [project.scripts]
-repolife = "repolife.cli:main"
+tessri = "tessri.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["repolife*"]
+include = ["tessri*"]

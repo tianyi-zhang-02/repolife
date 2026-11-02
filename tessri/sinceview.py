@@ -1,4 +1,4 @@
-"""Markdown for `repolife check`."""
+"""Markdown for `tessri check`."""
 
 from __future__ import annotations
 

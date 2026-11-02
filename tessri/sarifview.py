@@ -1,4 +1,4 @@
-"""`repolife check --format sarif`: the change check as a SARIF 2.1.0 log, for tools that already read that format.
+"""`tessri check --format sarif`: the change check as a SARIF 2.1.0 log, for tools that already read that format.
 
 This is a rendering of the finished check result, nothing more: one finding becomes one result in the same order,
 with the whole finding kept in a namespaced property bag, so the aggregate meaning of a finding ("4 files nothing
@@ -9,7 +9,7 @@ left out of the locations (it stays in the properties).
 
 Some consumers refuse a result without a location (GitHub code scanning rejects the whole log). `locationless="omit"`
 takes those results out of `results` for such a consumer, but only on request: the default keeps them, and an omitted
-finding is not dropped from the document, it moves whole into the run's `properties["repolife/locationless"]`, where
+finding is not dropped from the document, it moves whole into the run's `properties["tessri/locationless"]`, where
 the count of location-free findings is recorded either way. The gate (`--fail-on`) counts findings, not results, so
 omitting changes what a consumer displays and nothing else.
 """
@@ -24,7 +24,7 @@ from . import __version__
 
 SCHEMA = "https://docs.oasis-open.org/sarif/sarif/v2.1.0/errata01/os/schemas/sarif-schema-2.1.0.json"
 VERSION = "2.1.0"
-ROOT_ID = "REPOLIFE_ROOT"  # the uriBaseId every location refers to; originalUriBaseIds says which directory it is
+ROOT_ID = "TESSRI_ROOT"  # the uriBaseId every location refers to; originalUriBaseIds says which directory it is
 INFORMATIONAL = ("new-dependency", "orphan-resolved", "cycle-resolved")  # observations, not failures: kind informational, level none
 LEVEL = {"block": "error", "warn": "warning", "info": "note"}
 LOCATIONLESS = ("keep", "omit")  # what becomes of a finding with no usable file: a result without a location, or a property entry
@@ -72,7 +72,7 @@ def _result(f: dict, deleted: set[str]) -> dict:
     kind = f["kind"]
     informational = kind in INFORMATIONAL
     out = {
-        "ruleId": f"repolife/{kind}",
+        "ruleId": f"tessri/{kind}",
         "ruleIndex": RULE_INDEX[kind],
         "kind": "informational" if informational else "fail",
         "level": "none" if informational else LEVEL[f["severity"]],
@@ -86,7 +86,7 @@ def _result(f: dict, deleted: set[str]) -> dict:
         out["locations"] = [_location(usable[0])]
         if len(usable) > 1:
             out["relatedLocations"] = [{"id": i, "message": {"text": "also part of this finding"}, **_location(rel)} for i, rel in enumerate(usable[1:], 1)]
-    out["properties"] = {"repolife/finding": f}
+    out["properties"] = {"tessri/finding": f}
     return out
 
 
@@ -94,7 +94,7 @@ def sarif(result: dict, root: Path, locationless: str = "keep") -> dict:
     """The SARIF log for one `since.check` result analysed at `root` (the directory the paths are relative to).
 
     `locationless` is "keep" (every finding is a result, with or without a location) or "omit" (findings without a
-    location leave `results` and are kept whole under `run.properties["repolife/locationless"]["omitted"]`)."""
+    location leave `results` and are kept whole under `run.properties["tessri/locationless"]["omitted"]`)."""
     if locationless not in LOCATIONLESS:
         raise ValueError(f"locationless must be one of {', '.join(LOCATIONLESS)}, not {locationless!r}")
     deleted = {row["path"] for row in result.get("changed_files", []) if row.get("change") == "deleted"}
@@ -105,12 +105,12 @@ def sarif(result: dict, root: Path, locationless: str = "keep") -> dict:
     run = {
         "tool": {
             "driver": {
-                "name": "repolife",
+                "name": "tessri",
                 "version": __version__,
-                "informationUri": "https://github.com/tianyi-zhang-02/repolife",
+                "informationUri": "https://github.com/tianyi-zhang-02/tessri",
                 "rules": [
                     {
-                        "id": f"repolife/{kind}",
+                        "id": f"tessri/{kind}",
                         "shortDescription": {"text": short},
                         "fullDescription": {"text": full},
                         "defaultConfiguration": {"level": "none" if kind in INFORMATIONAL else {"dangling-import": "error", "new-dependency": "note"}.get(kind, "warning")},
@@ -122,11 +122,11 @@ def sarif(result: dict, root: Path, locationless: str = "keep") -> dict:
         "originalUriBaseIds": {ROOT_ID: {"uri": Path(root).resolve().as_uri() + "/"}},
         "results": results,
         "properties": {
-            "repolife/check": {key: result.get(key) for key in ("schema_version", "kind", "meta", "change", "summary", "notes")},
-            "repolife/locationless": {
+            "tessri/check": {key: result.get(key) for key in ("schema_version", "kind", "meta", "change", "summary", "notes")},
+            "tessri/locationless": {
                 "policy": locationless,
                 "count": len(without),
-                "omitted": [r["properties"]["repolife/finding"] for r in without] if locationless == "omit" else [],
+                "omitted": [r["properties"]["tessri/finding"] for r in without] if locationless == "omit" else [],
             },
         },
     }

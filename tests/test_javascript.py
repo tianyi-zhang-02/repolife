@@ -1,10 +1,10 @@
 import unittest
 
 from helpers import TempRepo, write_tree
-from repolife import config
-from repolife.analyze import analyze
-from repolife.analyzers.jslex import scan
-from repolife.explain import explain
+from tessri import config
+from tessri.analyze import analyze
+from tessri.analyzers.jslex import scan
+from tessri.explain import explain
 
 APP = {
     "package.json": '{"name": "app", "main": "dist/server.js", "bin": {"app": "./dist/cli.js"}, "scripts": {"gen": "node scripts/gen.mjs"}}',
