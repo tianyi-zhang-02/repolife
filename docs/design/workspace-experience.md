@@ -1,8 +1,8 @@
-# Workspace experience and brand exploration
+# Tessri workspace experience
 
-Iteration dated 2026-11-01. The author asked to improve the interface and interaction, taking inspiration from
-Kiro, and to reconsider the repolife name and design. This records the implemented HTML viewer iteration and
-the naming options still under discussion. It does not rename the package, command or configuration files.
+Design updated 2026-11-01. A focused, offline repository viewer, trialing the **Tessri** identity after
+[official name checks](tessri-name-check.json). Package, command, configuration and integration identifiers
+remain `repolife`. The author's priorities are better interaction and a simpler overall product.
 
 ## A place to understand the system
 
@@ -20,54 +20,40 @@ generator or additional required workflow.
 
 | Interaction | Behavior |
 | --- | --- |
-| Grouped navigation | Understand, Explore change, Maintain, and Report group the existing sections. One section is visible with scripts; every section remains in the generated HTML. |
-| Start with a question | Three overview links open the corresponding views. Current evidence and metrics remain available below them. |
+| Primary navigation | Four entries: Overview, System map, Impact, Maintenance. One section is visible with scripts; every section remains in the generated HTML. |
+| Secondary views | A native More views disclosure contains Directories, Change volume, Maintainers, Hotspots, Cleanup and Analysis notes. All original section IDs remain. |
+| Start with a question | Three text links on the overview lead to structure, impact and maintenance evidence. They add no launcher cards. Metrics use unframed rows. |
 | Quick navigation | Cmd/Ctrl+K searches view names and the analyzed file/directory index in this snapshot. Arrow keys select; Enter opens; Escape closes and returns focus. At most 60 matches are displayed, with an explicit count. |
 | Choose a path | Opens the impact view with the selected path. The relationship policy and hop limit stay selected. |
 | Compare evidence | All relationships is the compatible default. Import-based relationships follows `import` and `package` evidence. The broad view reports the narrower totals at the same hop limit. Inferred and unknown references can be expanded. |
-| Return to context | Section fragments and browser Back/Forward switch views. Queries and table filters survive switching views within the loaded document. Reloading resets queries; file queries are not shareable URLs in this iteration. |
+| Return to context | Section fragments and browser Back/Forward switch views. An impact fragment carries the path, relationship policy and hop limit; reloading restores them. Typing replaces the current entry rather than adding history per keystroke. Table filters remain in document memory. Plain legacy `#impact` retains an existing in-page query; it does not carry a query on its own. |
 | Scope | Repository name and history HEAD are visible. A date is shown on larger layouts. Analysis notes disclose the full repository path, capture time, history reference and that code was read from current files. “Local snapshot” describes a generated file, without suggesting a running analysis, live agent or clean worktree. |
 | Offline and degraded use | No network assets, libraries, font downloads or service are required. Without scripts, all sections remain readable. Printing exposes all sections. Without an explorer payload, quick navigation still finds views and explicitly says the file index is unavailable. |
 
 Only analyzed code paths are indexed. The existing 20,000-file explorer limit remains; the CLI still handles
 queries when the report omits its embedded graph. Current selection and results are kept in document memory,
-not synchronized across tools. The theme uses the existing local preference.
+not synchronized across tools. The impact query is also represented in the fragment. The theme uses the existing local preference.
 
 ## Visual direction
 
 Use a quiet developer workbench: a stable rail, a compact context header, neutral surfaces, and purple for
 identity, selection and navigation. The existing four status hues and their text labels remain. Purple does
-not carry a new risk score. The original line mark suggests a continuing thread joining parts of a system.
+not carry a new risk score. The connected-tile T mark suggests separate pieces forming a coherent whole.
 
-The current wordmark is **repolife.**, with the working promise **Keep code understandable.** It is a visual
-trial in the actual report, not a finalized identity. The rail becomes a horizontally scrollable section list
-on small screens. Reduced-motion preferences remove the view transition. Quick navigation uses a native modal
+The current wordmark is **tessri.**, with the working promise **Keep code understandable.** It is a visual
+trial in the actual report. Brand color is reserved for identity and selection; navigation uses text without
+decorative icons. The rail becomes a compact primary row on small screens, with secondary links under the
+same disclosure. Reduced-motion preferences remove the view transition. Quick navigation uses a native modal
 dialog, a labeled combobox and listbox, and restores focus on dismissal.
 
-## Naming directions
+## Simplicity boundary
 
-The author subsequently selected **explore a shorter, more distinctive new brand**. This supersedes the
-initial recommendation below to prioritize the Repolife identity. Repolife remains the implementation name
-during exploration; RepoKind is no longer the leading alternative. See the [new naming study](brand-naming.md).
+Keep one working surface for the selected question. Put evidence qualifications next to results and details
+behind native disclosures. Avoid extra scorecards, onboarding steps, agent chat, copy-link buttons or live
+sync indicators. Link restoration lets a normal browser URL carry context
+without adding another action to the interface.
 
-Names should be easy to say and type, fit a CLI and an embedded panel, and express lasting understanding or
-care. Avoid promising runtime correctness, autonomous review approval, or support for languages the analyzers
-do not cover. Compare names in ordinary sentences such as “open X,” “X found this relationship,” and “include
-X evidence in the PR.”
-
-| Direction | Meaning and strengths | Concern |
-| --- | --- | --- |
-| **Repolife** | The repository has a life after code generation. Already matches the package, command and maintenance purpose. The clearer promise gives the name a specific job. | Broad meaning, three spoken syllables, and search ambiguity. An unrelated developer identity also uses repolife; see the [Agent Board listing](https://glama.ai/mcp/servers/repolife/agent-board). |
-| **RepoKind** | A shorter candidate centered on care for code and the people maintaining it. Works as a quiet, approachable tool identity. | “Kind” is ambiguous and does not directly explain system understanding. Initial search did not establish availability; package, repository, domain and trademark checks are still required before selection. |
-
-The initial recommendation was to evaluate the improved Repolife identity in this real viewer while testing
-RepoKind as a naming alternative. Keep compatibility-sensitive identifiers until the author selects a name
-and a migration is designed. A branding decision should update the UI, README and positioning together;
-changing every identifier now would make the experiment harder to reverse.
-
-Other explored names were dropped from this shortlist because of visible uses: [RepoWeave](https://github.com/cwalv/repoweave),
-[Repora](https://github.com/hackelia-micrantha/repora), and [Repolume](https://ai-resume-github-analyzer.vercel.app/privacy).
-This is preliminary product naming research, not a determination of legal availability.
+Naming rationale, availability limits and future migration requirements live in the [naming study](brand-naming.md).
 
 ## Validation and next trial
 
@@ -81,3 +67,12 @@ Responsive layout checks inspect the 390px and 1440px breakpoints. Test results 
 consistency; they do not yet show that the interface saves reviewer time. The next product trial should ask
 a maintainer to locate a module, investigate a changed file, and explain which relationships are inferred,
 then record where they hesitated or lost context.
+
+Joint acceptance for the simplified viewer: Python 3.11 and 3.12 each passed all **371 tests**. Claude Code
+implemented the URL state in an isolated checkout; Codex reviewed and integrated that JS with the simplified
+HTML/CSS, then ran both suites on the combined source. Browser checks confirmed initial-load and refresh
+restoration, Back/Forward after multiple input edits, file selection from quick navigation, automatic opening
+of secondary navigation, the skip link and a nested cycle link. An analyzed fixture verified spaces, `&`, `#`,
+`?`, Unicode and a seven-step limit not initially present in the select. Malformed parameters produced a normal
+lookup error and safe defaults, with no console error. A long repository name caused no document overflow at
+390px. Light and dark themes were visually inspected at the default preview size.

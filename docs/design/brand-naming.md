@@ -33,13 +33,34 @@ Why advance it:
 Weaknesses to test: listeners may spell it Tesri or Tessry; the middle consonants may be awkward for some
 speakers. Proposed pronunciation must be tested by asking people to say the name, then spell it after hearing
 it. The initial exact-name and developer/package-oriented web searches found no obvious same-name development
-tool, but did surface the non-software company string TESSRI S.A.S. in a
+tool, but did surface the company name string TESSRI S.A.S. in a
 [Colombian court publication](https://www.ramajudicial.gov.co/documents/36156821/140101101/estado%2B065.pdf/cfc9eec0-5597-f5cc-d47f-2f538062011b).
-The company's field and legal relevance were not established. Package registry names, domains, handles and
-trademark availability remain unverified. Search absence is not availability.
+The company's field and legal relevance were not established. Search absence is not availability.
+
+### Official name checks, 2026-11-01
+
+Read-only queries to the official services returned the following. The full URLs, UTC timestamp and HTTP
+statuses are retained in [the check record](tessri-name-check.json). The timestamp corresponds to November 1
+in America/New_York.
+
+| Surface | Observed result |
+| --- | --- |
+| PyPI `tessri` | Package JSON endpoint returned 404. |
+| npm `tessri` | Package registry endpoint returned 404. |
+| GitHub `tessri` handle | User/organization endpoint returned 404. |
+| GitHub repository names containing `tessri` | Repository search returned zero results. |
+| `tessri.com` | Verisign RDAP returned 404. |
+| `tessri.dev` | Google Registry RDAP returned 404. |
+| `tessri.org` | Public Interest Registry RDAP returned 404. |
+
+RDAP providers were obtained from the IANA bootstrap rather than inferred from DNS. A 404 means no public
+record was returned at query time; it does not reserve the name or prove registration/publishing eligibility.
+No domain was purchased or account/package name reserved. Trademark clearance remains unverified. These
+results support a reversible Tessri viewer identity trial while the executable and integration identifiers
+remain `repolife`.
 
 The [identity study](assets/tessri-identity-study.svg) compares the same wordmark in light and dark contexts.
-It is a reversible proposal, with no changes to the shipped viewer name. Any Tessri command shown in design
+It is a reversible proposal, now being tried in the viewer name. Any Tessri command shown in design
 material is illustrative; the executable remains `repolife`.
 
 ## Screening decisions
@@ -49,7 +70,7 @@ strong adjacent uses. These are product differentiation decisions, not legal con
 
 | Candidate | Decision | Evidence / concern |
 | --- | --- | --- |
-| Tessri | Advance to pronunciation and identity trial | No obvious same-name developer tool in the initial searches; non-software use noted above. Further availability checks remain. |
+| Tessri | Viewer identity trial | No obvious same-name developer tool in the initial searches; company name use noted above. Official registry checks are recorded above; rights and publishing/registration eligibility remain unconfirmed. |
 | Vesri | Hold | Compact, but visually close to Esri; weak differentiation for a system-mapping tool. |
 | RepoKind | Deprioritize | Retains the descriptive Repo pattern the author now wants to move beyond. |
 | Navri | Drop | [NavriScript](https://navri.ai/) already describes an AI systems language and ecosystem. |

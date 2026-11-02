@@ -501,10 +501,15 @@ repolife scan . --format html --out report.html
 ```
 
 One self-contained file: styles, script and data are inside it, nothing is fetched, and Python renders all
-sections, so it reads without scripts and prints. With scripts enabled, a grouped sidebar opens one focused
-view at a time. Use **⌘K / Ctrl+K** to find a view, analyzed file or directory; choosing a path opens its impact
+sections, so it reads without scripts and prints. The viewer trials the **Tessri** identity; the package,
+command and configuration remain `repolife`. With scripts enabled, four primary navigation entries open
+one focused view at a time; additional sections are under **More views**. Use **⌘K / Ctrl+K** to find a view,
+analyzed file or directory; choosing a path opens its impact
 analysis. Escape closes quick navigation, and the arrow keys and Enter select a result. Section links and
-browser Back/Forward work, and switching views preserves the current query and filters. The repository and
+browser Back/Forward work, and switching views preserves the current query and filters. Impact queries are
+carried in the URL fragment, including relationship policy and step limit, so refreshing or reopening the
+same report at that URL restores the query. Typing updates the current entry without adding history per
+keystroke. The repository and
 snapshot revision remain visible; the report is a captured analysis, not a live workspace connection.
 
 | Section | What it is for |

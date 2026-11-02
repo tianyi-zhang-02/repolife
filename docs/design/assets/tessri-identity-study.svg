@@ -1,39 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1120" height="720" viewBox="0 0 1120 720" role="img" aria-labelledby="title desc">
   <title id="title">Tessri identity study</title>
   <desc id="desc">A proposed short name for repolife, with a geometric T made of connected tiles. The same wordmark appears on light and dark backgrounds. This is a naming proposal; the current command remains repolife.</desc>
+  <defs><g id="tessri-mark"><path d="M7 6h18v3H7zM15 7h3v20h-3z"/><rect x="3" y="2" width="11" height="10" rx="3"/><rect x="19" y="2" width="11" height="10" rx="3"/><rect x="12" y="15" width="9" height="7" rx="2"/><rect x="12" y="25" width="9" height="7" rx="2"/></g></defs>
   <rect width="1120" height="720" fill="#eeedf3"/>
   <text x="56" y="60" fill="#595564" font-family="system-ui, sans-serif" font-size="14" letter-spacing="2">IDENTITY STUDY / 01</text>
-  <text x="56" y="119" fill="#201c2b" font-family="system-ui, sans-serif" font-size="38" font-weight="550" letter-spacing="-1">A clearer name for lasting understanding.</text>
+  <text x="56" y="119" fill="#201c2b" font-family="system-ui, sans-serif" font-size="38" font-weight="550" letter-spacing="-1">Keep code understandable.</text>
   <g transform="translate(40 158)">
     <rect width="1040" height="214" rx="16" fill="#fcfcfb"/>
-    <g transform="translate(50 48)" fill="#6652cb">
-      <rect width="31" height="31" rx="8"/>
-      <rect x="39" width="31" height="31" rx="8"/>
-      <rect x="19.5" y="39" width="31" height="31" rx="8"/>
-      <rect x="19.5" y="78" width="31" height="31" rx="8"/>
-      <path d="M35 22v65" fill="none" stroke="#6652cb" stroke-width="5"/>
-    </g>
-    <text x="157" y="105" fill="#201c2b" font-family="system-ui, sans-serif" font-size="72" font-weight="600" letter-spacing="-3">tessri<tspan fill="#6652cb">.</tspan></text>
-    <text x="160" y="143" fill="#605b6d" font-family="system-ui, sans-serif" font-size="19">Keep code understandable.</text>
+    <use href="#tessri-mark" transform="translate(45 45) scale(3)" fill="#6652cb"/>
+    <text x="180" y="105" fill="#201c2b" font-family="system-ui, sans-serif" font-size="72" font-weight="600" letter-spacing="-3">tessri<tspan fill="#6652cb">.</tspan></text>
+    <text x="183" y="143" fill="#605b6d" font-family="system-ui, sans-serif" font-size="19">Keep code understandable.</text>
     <text x="818" y="71" fill="#6652cb" font-family="system-ui, sans-serif" font-size="13" letter-spacing="1.5">TESS-REE</text>
     <text x="818" y="99" fill="#605b6d" font-family="system-ui, sans-serif" font-size="15">6 letters</text>
     <text x="818" y="125" fill="#605b6d" font-family="system-ui, sans-serif" font-size="15">2 syllables</text>
   </g>
   <g transform="translate(40 388)">
     <rect width="1040" height="214" rx="16" fill="#17151e"/>
-    <g transform="translate(50 48)" fill="#b0a0ff">
-      <rect width="31" height="31" rx="8"/>
-      <rect x="39" width="31" height="31" rx="8"/>
-      <rect x="19.5" y="39" width="31" height="31" rx="8"/>
-      <rect x="19.5" y="78" width="31" height="31" rx="8"/>
-      <path d="M35 22v65" fill="none" stroke="#b0a0ff" stroke-width="5"/>
-    </g>
-    <text x="157" y="105" fill="#f0eef6" font-family="system-ui, sans-serif" font-size="72" font-weight="600" letter-spacing="-3">tessri<tspan fill="#b0a0ff">.</tspan></text>
-    <text x="160" y="143" fill="#c1bacf" font-family="system-ui, sans-serif" font-size="19">Stay oriented as code changes.</text>
+    <use href="#tessri-mark" transform="translate(45 45) scale(3)" fill="#b0a0ff"/>
+    <text x="180" y="105" fill="#f0eef6" font-family="system-ui, sans-serif" font-size="72" font-weight="600" letter-spacing="-3">tessri<tspan fill="#b0a0ff">.</tspan></text>
+    <text x="183" y="143" fill="#c1bacf" font-family="system-ui, sans-serif" font-size="19">Keep code understandable.</text>
     <text x="818" y="71" fill="#b0a0ff" font-family="system-ui, sans-serif" font-size="13" letter-spacing="1.5">THE IDEA</text>
     <text x="818" y="99" fill="#c1bacf" font-family="system-ui, sans-serif" font-size="15">Separate pieces.</text>
     <text x="818" y="125" fill="#c1bacf" font-family="system-ui, sans-serif" font-size="15">A coherent system.</text>
   </g>
-  <text x="56" y="649" fill="#605b6d" font-family="system-ui, sans-serif" font-size="16">Working brand proposal · availability unconfirmed · current CLI: repolife</text>
+  <text x="56" y="649" fill="#605b6d" font-family="system-ui, sans-serif" font-size="16">Viewer identity trial · official name checks recorded · current CLI: repolife</text>
   <text x="56" y="681" fill="#605b6d" font-family="system-ui, sans-serif" font-size="14">An original geometric mark. No package, command or public project rename.</text>
 </svg>

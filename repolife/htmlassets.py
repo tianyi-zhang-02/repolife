@@ -45,12 +45,6 @@ code, .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monosp
 :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .wrap { max-width: 1120px; margin: 0 auto; padding: 0 16px; }
 
-.top { position: sticky; top: 0; z-index: 5; background: var(--page); border-bottom: 1px solid var(--grid); }
-.bar { display: flex; align-items: center; gap: 12px; min-height: 48px; }
-.bar strong { font-weight: 650; }
-.bar nav { display: flex; gap: 2px; flex: 1; overflow-x: auto; white-space: nowrap; scrollbar-width: none; }
-.bar nav a { padding: 6px 10px; border-radius: 6px; color: var(--ink2); text-decoration: none; }
-.bar nav a:hover { background: var(--wash); color: var(--ink); }
 .btn { font: inherit; font-size: 13px; padding: 5px 10px; border: 1px solid var(--axis); border-radius: 6px; background: var(--surface); color: var(--ink2); cursor: pointer; white-space: nowrap; }
 .btn:hover { background: var(--wash); color: var(--ink); }
 
@@ -176,35 +170,36 @@ body { font-size: 14px; }
 .workspace-ready .script-only { display: inline-flex; }
 .skip-link { position: fixed; top: -100px; left: 16px; z-index: 40; padding: 12px; background: var(--surface); }
 .skip-link:focus { top: 12px; }
-.workspace-rail { position: fixed; inset: 0 auto 0 0; width: 232px; z-index: 10; display: flex; flex-direction: column; padding: 26px 16px 16px; background: var(--rail); border-right: 1px solid var(--grid); overflow-y: auto; }
+.workspace-rail { position: fixed; inset: 0 auto 0 0; width: 216px; z-index: 10; display: flex; flex-direction: column; padding: 26px 16px 16px; background: var(--rail); border-right: 1px solid var(--grid); overflow-y: auto; }
 .wordmark { display: flex; align-items: center; gap: 10px; padding: 0 10px; font-size: 23px; letter-spacing: -.8px; }
 .wordmark strong { font-weight: 650; }
-.brand-mark { width: 30px; height: 30px; color: var(--brand); }
+.brand-mark { width: 27px; height: 27px; color: var(--brand); }
 .brand-dot { color: var(--brand); }
 .brand-caption { margin: 5px 0 26px 10px; color: var(--ink2); font-size: 12px; }
-.repo-context { display: grid; gap: 5px; margin: 0 0 12px; padding: 12px; background: var(--surface); border: 1px solid var(--grid); border-radius: 10px; overflow-wrap: anywhere; }
-.context-label, .nav-label { font-size: 10px; font-weight: 650; letter-spacing: 1.2px; color: var(--ink2); }
+.repo-context { display: grid; gap: 5px; margin: 0 0 18px; padding: 0 10px 18px; border-bottom: 1px solid var(--grid); overflow-wrap: anywhere; }
+.context-label { font-size: 10px; font-weight: 650; letter-spacing: 1.2px; color: var(--ink2); }
 .repo-context strong { font-weight: 600; }
 .repo-context .mono { color: var(--ink2); font-size: 11px; }
 .quick-trigger { justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 12px; padding: 9px 10px; border: 1px solid var(--grid); border-radius: 7px; background: transparent; color: var(--ink2); font: inherit; font-size: 12px; cursor: pointer; }
 kbd { font: 11px ui-monospace, monospace; color: var(--ink2); padding: 1px 4px; border: 1px solid var(--axis); border-radius: 4px; white-space: nowrap; }
-.nav-group { margin-top: 16px; }
-.nav-label { margin: 0 10px 7px; text-transform: uppercase; }
-.workspace-rail nav a { display: flex; align-items: center; gap: 10px; padding: 8px 10px; margin: 2px 0; border-radius: 7px; color: var(--ink2); text-decoration: none; font-size: 13px; }
+.nav-primary { margin-top: 10px; }
+.workspace-rail nav a { display: flex; align-items: center; padding: 9px 10px; margin: 2px 0; border-radius: 6px; color: var(--ink2); text-decoration: none; font-size: 13px; }
 .workspace-rail nav a:hover, .quick-trigger:hover { background: var(--wash); color: var(--ink); }
 .workspace-rail nav a[aria-current=page] { color: var(--ink); background: var(--accent-soft); font-weight: 600; }
-.nav-icon { width: 18px; text-align: center; font-size: 17px; line-height: 1; color: var(--brand); }
+.nav-more { margin-top: 18px; border-top: 1px solid var(--grid); padding-top: 10px; }
+.nav-more summary { margin: 0; padding: 9px 10px; font-size: 12px; }
+.nav-secondary { padding-top: 4px; }
 .rail-bottom { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: auto; padding: 28px 10px 0; color: var(--ink2); font-size: 11px; }
 .rail-bottom a { flex-basis: 100%; margin-top: 4px; color: var(--ink2); text-decoration: none; }
 .snapshot-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--axis); }
-.workspace-main { margin-left: 232px; min-width: 0; }
+.workspace-main { margin-left: 216px; min-width: 0; }
 .workspace-top { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 58px; padding: 10px 32px; background: var(--page); border-bottom: 1px solid var(--grid); }
 .workspace-breadcrumb { display: flex; flex-wrap: wrap; gap: 10px; font-size: 12px; color: var(--ink2); }
 .workspace-breadcrumb strong { color: var(--ink); font-weight: 500; }
-.snapshot-meta { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--ink2); }
+.snapshot-meta { display: flex; flex-shrink: 0; align-items: center; gap: 14px; font-size: 11px; color: var(--ink2); }
 .snapshot-revision { display: none; white-space: nowrap; }
 .workspace-breadcrumb { min-width: 0; }
-.workspace-breadcrumb > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 24ch; }
+.workspace-breadcrumb > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: min(24ch, 100%); }
 .workspace-main > .wrap { max-width: 1280px; padding-left: 36px; padding-right: 36px; }
 .workspace-main main { padding-top: 34px; min-height: calc(100vh - 138px); }
 .workspace-ready main > section { display: none; padding-top: 0; }
@@ -214,15 +209,14 @@ h1 { font-size: 28px; letter-spacing: -.7px; }
 h2 { font-size: 25px; letter-spacing: -.5px; }
 .lede { margin-top: 9px; margin-bottom: 24px; font-size: 13px; }
 .hero { font-size: 42px; letter-spacing: -1px; }
-.card { border-color: var(--grid); border-radius: 12px; box-shadow: 0 2px 3px rgba(0,0,0,.015); }
+.card { border-color: var(--grid); border-radius: 10px; }
+.tiles { gap: 0 24px; border-top: 1px solid var(--grid); margin-top: 24px; }
+.tiles > .tile { padding: 18px 0; border: 0; border-bottom: 1px solid var(--grid); border-radius: 0; background: transparent; }
 .tile .value { font-size: 24px; letter-spacing: -.5px; }
-.start-points { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 0 0 24px; }
-.start-points a { display: grid; grid-template-columns: 30px 1fr 12px; align-items: center; gap: 7px; padding: 16px; border: 1px solid var(--grid); border-radius: 12px; background: var(--surface); color: var(--ink); text-decoration: none; }
-.start-points a:hover { border-color: var(--brand); background: var(--accent-soft); }
-.start-points strong { font-size: 12px; font-weight: 600; }
-.start-points a > span:not(.start-icon) { grid-column: 2 / 4; color: var(--ink2); font-size: 11px; }
-.start-icon { grid-row: 1 / 3; font-size: 23px; color: var(--brand); }
-.start-points b { font-weight: 400; color: var(--ink2); }
+.start-points { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 24px; }
+.start-points a { color: var(--ink2); font-size: 12px; text-decoration: none; }
+.start-points a:hover { color: var(--brand); text-decoration: underline; }
+.start-points span { color: var(--brand); margin-left: 3px; }
 .explorer .tools { gap: 10px; }
 .explorer input { max-width: none; flex: 1 1 300px; }
 .explorer select { font-size: 12px; }
@@ -244,16 +238,17 @@ dialog::backdrop { background: rgba(0,0,0,.38); }
 .quick-empty { padding: 20px 12px; color: var(--ink2); font-size: 12px; }
 .quick-footer { display: flex; justify-content: space-between; gap: 12px; padding: 12px 20px; border-top: 1px solid var(--grid); color: var(--ink2); font-size: 11px; }
 footer { font-size: 11px; }
-@media (max-width: 1150px) { .start-points { grid-template-columns: 1fr; } .start-points a { padding: 12px 16px; } }
 @media (max-width: 800px) {
   .workspace-rail { position: relative; width: auto; padding: 16px; border-right: 0; border-bottom: 1px solid var(--grid); }
   .wordmark { padding-left: 0; font-size: 22px; }
-  .brand-caption, .repo-context, .rail-bottom, .nav-label { display: none; }
+  .brand-caption, .repo-context, .rail-bottom { display: none; }
   .quick-trigger { position: absolute; right: 16px; top: 17px; margin: 0; }
-  .workspace-rail nav { display: flex; gap: 4px; overflow-x: auto; margin-top: 14px; }
-  .nav-group { display: contents; }
+  .workspace-rail nav { margin-top: 14px; }
+  .nav-primary { display: flex; gap: 4px; overflow-x: auto; margin-top: 0; }
+  .nav-more { margin-top: 4px; padding-top: 0; border: 0; }
+  .nav-secondary { display: flex; flex-wrap: wrap; gap: 4px; }
+  .nav-more summary { padding: 5px 9px; }
   .workspace-rail nav a { flex-shrink: 0; padding: 7px 9px; }
-  .nav-icon { display: none; }
   .workspace-main { margin-left: 0; }
   .workspace-main > .wrap { padding-left: 20px; padding-right: 20px; }
   .workspace-top { padding-left: 20px; padding-right: 20px; }
@@ -409,8 +404,39 @@ function impactOf(E, input, hops, testLimit, policy = 'all') {
   };
 }
 
+// ---- URL fragment: #view, or #impact?path=<encoded>&edges=all|imports&hops=<n> for a restorable query ------
+// Pure functions: the page wires them to location, history and the explorer controls below.
+
+function positiveSteps(value) {
+  // A hop limit is a positive safe integer, written plainly; anything else is "no limit given", never a wider walk.
+  const text = String(value == null ? '' : value).trim();
+  return /^[1-9][0-9]*$/.test(text) && Number.isSafeInteger(Number(text)) ? Number(text) : null;
+}
+
+function parseFragment(hash) {
+  const raw = String(hash == null ? '' : hash).replace(/^#/, '');
+  const cut = raw.indexOf('?');
+  let view;
+  try { view = decodeURIComponent(cut < 0 ? raw : raw.slice(0, cut)); } catch (_) { view = ''; }
+  const params = new URLSearchParams(cut < 0 ? '' : raw.slice(cut + 1));  // first value wins; malformed escapes do not throw
+  const path = (params.get('path') || '').trim();
+  if (view !== 'impact' || !path) return {view, query: null};
+  const edges = params.get('edges') === 'imports' ? 'imports' : 'all';
+  return {view, query: {path, edges, hops: positiveSteps(params.get('hops'))}};
+}
+
+function impactFragment(path, edges, hops) {
+  const name = String(path == null ? '' : path).trim();
+  if (!name) return '#impact';
+  let fragment = '#impact?path=' + encodeURIComponent(name);
+  if (edges === 'imports') fragment += '&edges=imports';
+  const steps = positiveSteps(hops);
+  if (steps != null) fragment += '&hops=' + steps;
+  return fragment;
+}
+
 const root = typeof globalThis !== 'undefined' ? globalThis : window;
-root.RepolifeCore = {resolve, impactOf};
+root.RepolifeCore = {resolve, impactOf, parseFragment, impactFragment};
 if (typeof document === 'undefined') return;
 
 // ---- page ------------------------------------------------------------------------------------------------
@@ -444,6 +470,11 @@ themeButton.addEventListener('click', () => {
 });
 applyTheme();
 
+// The impact explorer's controls, declared here because restoring a query from the URL happens while the first
+// view is chosen, before the explorer block below runs.
+const E = DATA.explorer;
+const input = $('#impact-q'), out = $('#impact-out'), hopsBox = $('#impact-hops'), edgesBox = $('#impact-edges');
+
 // Focused views retain ordinary anchors as the no-script and print fallback.
 const views = $$('main > section[id]'), viewLinks = $$('nav a[data-view]');
 function selectView(id, focus) {
@@ -456,6 +487,8 @@ function selectView(id, focus) {
   });
   const link = viewLinks.find(a => a.dataset.view === id);
   $('#current-view').textContent = link ? link.lastElementChild.textContent : id;
+  const holder = link && link.closest('details');  // a secondary entry folded into the rail's "more" list
+  if (holder && !holder.open) holder.open = true;
   if (focus) {
     const heading = $('h1, h2', view);
     if (heading) { heading.tabIndex = -1; heading.focus({preventScroll: true}); }
@@ -464,15 +497,21 @@ function selectView(id, focus) {
   return true;
 }
 function hashView() {
-  let id;
-  try { id = decodeURIComponent(location.hash.slice(1)); } catch (_) { id = ''; }
+  // Reads the address and never writes it, so a hash change can not start a loop.
+  const parsed = parseFragment(location.hash);
+  const id = parsed.view;
   if (id === 'workspace-content' && views.some(view => view.classList.contains('is-active'))) return;
   const node = document.getElementById(id), view = node && node.closest('main > section');
   selectView(view ? view.id : 'overview', false);
+  if (parsed.query && view && view.id === 'impact') applyImpactQuery(parsed.query);
+}
+function currentFragment(id) {
+  return id === 'impact' && E && input ? impactFragment(input.value, edgesBox.value, hopsBox.value) : '#' + id;
 }
 function navigateWorkspace(id, focus = true) {
   if (!selectView(id, focus)) return;
-  if (location.hash !== '#' + id) location.hash = id;
+  const target = currentFragment(id);  // the impact entry carries the query, so it is a link worth keeping
+  if (location.hash !== target) location.hash = target;
 }
 document.addEventListener('click', event => {
   const link = event.target.closest('a[href^="#"]');
@@ -637,11 +676,36 @@ if (svg) {
 const fit = $('#fit');
 if (fit) fit.addEventListener('click', () => { const on = $('#graph').classList.toggle('fit'); fit.textContent = on ? 'Actual size' : 'Fit width'; });
 
-// impact explorer
-const E = DATA.explorer;
-const input = $('#impact-q'), out = $('#impact-out'), hopsBox = $('#impact-hops'), edgesBox = $('#impact-edges');
+// impact explorer (its controls are declared with the views above)
+function applyImpactQuery(query) {
+  if (!E || !input) return;
+  input.value = query.path;
+  edgesBox.value = query.edges;
+  if (query.hops == null) hopsBox.value = '';
+  else {
+    // A limit the control does not offer gets its own option, so the link's limit is applied, not widened.
+    const text = String(query.hops);
+    if (!Array.from(hopsBox.options).some(option => option.value === text)) hopsBox.append(el('option', {value: text, text: text + (query.hops === 1 ? ' step' : ' steps')}));
+    hopsBox.value = text;
+  }
+  renderImpact();
+}
+function syncImpactUrl() {
+  // While the impact view is current, the address mirrors the query through replaceState: one history entry per
+  // view change, none per keystroke. Fails quietly where the history API is unavailable.
+  if (!E || !input) return;
+  const active = views.find(view => view.classList.contains('is-active'));
+  if (!active || active.id !== 'impact') return;
+  const target = impactFragment(input.value, edgesBox.value, hopsBox.value);
+  if (location.hash === target) return;
+  try { history.replaceState(history.state, '', target); } catch (_) { /* the address stays as it is */ }
+}
 function renderImpact() {
   if (!E) return;
+  paintImpact();
+  syncImpactUrl();
+}
+function paintImpact() {
   const q = input.value;
   if (!q.trim()) { out.replaceChildren(el('p', {class: 'sub', text: 'Type a file or a directory from this repository.'})); return; }
   const hops = hopsBox.value ? Number(hopsBox.value) : null;

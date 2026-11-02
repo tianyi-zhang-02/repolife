@@ -154,9 +154,9 @@ def _overview(report: dict, graph: dict | None) -> str:
 <h1>{e(report['repo']['name'])}</h1>
 <p class="lede">{' · '.join(meta)}</p>
 <div class="start-points" aria-label="Start with a question">
-  <a href="#modules"><span class="start-icon" aria-hidden="true">⌘</span><strong>Understand the system</strong><span>Explore modules and their relationships</span><b aria-hidden="true">↗</b></a>
-  <a href="#impact"><span class="start-icon" aria-hidden="true">↳</span><strong>Explore a change</strong><span>Trace dependents and candidate tests</span><b aria-hidden="true">↗</b></a>
-  <a href="#attention"><span class="start-icon" aria-hidden="true">◉</span><strong>Find maintenance work</strong><span>See the evidence worth looking at</span><b aria-hidden="true">↗</b></a>
+  <a href="#modules">Understand the system <span aria-hidden="true">↗</span></a>
+  <a href="#impact">Explore a change <span aria-hidden="true">↗</span></a>
+  <a href="#attention">Find maintenance work <span aria-hidden="true">↗</span></a>
 </div>
 <div class="card">
   <div class="hero">{n(s['code_lines'])}</div>
@@ -413,7 +413,7 @@ def _impact_section(explorer: dict | None) -> str:
 <div class="card"><p class="empty">Not available: there are no analysed code files, or too many to carry in one page. Run <code>repolife impact</code> instead.</p></div></section>"""
     return """<section id="impact">
 <h2>What does a change reach?</h2>
-<p class="lede">Follow a file or directory through this repository. Compare the broad evidence with recognized imports and Python parent packages. These are possible effects, not runtime guarantees.</p>
+<p class="lede">Choose a file or folder to see related code and candidate tests.</p>
 <div class="card explorer">
   <div class="tools">
     <input type="text" id="impact-q" list="impact-list" placeholder="src/app/main.py or src/app" autocomplete="off" spellcheck="false" aria-label="File or directory">
@@ -644,12 +644,9 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
         "graph": {"modules": graph["modules"]} if has_graph else None,
         "explorer": explorer,
     }
-    nav = [
-        ("Understand", [("overview", "Overview", "◈"), ("modules", "System map", "⌘"), ("directories", "Directories", "▤")]),
-        ("Explore change", [("impact", "Impact explorer", "↳"), ("review", "Change volume", "≋")]),
-        ("Maintain", [("attention", "Look first", "◉"), ("ownership", "Maintainers", "◎"), ("hotspots", "Hotspots", "↗"), ("cleanup", "Cleanup", "◇")]),
-        ("Report", [("notes", "Analysis notes", "ⓘ")]),
-    ]
+    primary = [("overview", "Overview"), ("modules", "System map"), ("impact", "Impact"), ("attention", "Maintenance")]
+    secondary = [("directories", "Directories"), ("review", "Change volume"), ("ownership", "Maintainers"),
+                 ("hotspots", "Hotspots"), ("cleanup", "Cleanup"), ("notes", "Analysis notes")]
     body = "\n".join(
         part
         for part in (
@@ -666,12 +663,10 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
         )
         if part
     )
-    links = "".join(
-        f'<div class="nav-group"><p class="nav-label">{group}</p>'
-        + "".join(f'<a href="#{i}" data-view="{i}"><span class="nav-icon" aria-hidden="true">{icon}</span><span>{label}</span></a>' for i, label, icon in items)
-        + "</div>"
-        for group, items in nav
-    )
+    def links(items: list[tuple[str, str]]) -> str:
+        return "".join(f'<a href="#{i}" data-view="{i}"><span>{label}</span></a>' for i, label in items)
+
+    navigation = f'<div class="nav-primary">{links(primary)}</div><details class="nav-more"><summary>More views</summary><div class="nav-secondary">{links(secondary)}</div></details>'
     scope = report.get("meta", {})
     repo_root = scope.get("repo", {}).get("root", report["repo"]["name"])
     head = scope.get("git", {}).get("head") or report["git"].get("head")
@@ -684,18 +679,18 @@ def render(report: dict, graph: dict | None, explorer: dict | None) -> str:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light dark">
 <meta name="generator" content="repolife {e(__version__)}">
-<title>repolife: {e(report['repo']['name'])}</title>
+<title>Tessri: {e(report['repo']['name'])}</title>
 <script>{THEME_BOOT}</script>
 <style>{CSS}</style>
 </head>
 <body>
 <a class="skip-link" href="#workspace-content">Skip to report</a>
 <aside class="workspace-rail">
-  <div class="wordmark"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M7 25V12a5 5 0 0 1 10 0v8a5 5 0 0 0 10 0V7M7 17h20" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg><strong>repolife<span class="brand-dot">.</span></strong></div>
+  <div class="wordmark"><svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true" fill="currentColor"><path d="M7 6h18v3H7zM15 7h3v20h-3z"/><rect x="3" y="2" width="11" height="10" rx="3"/><rect x="19" y="2" width="11" height="10" rx="3"/><rect x="12" y="15" width="9" height="7" rx="2"/><rect x="12" y="25" width="9" height="7" rx="2"/></svg><strong>tessri<span class="brand-dot">.</span></strong></div>
   <p class="brand-caption">Keep code understandable.</p>
   <div class="repo-context" title="{e(str(repo_root))}"><span class="context-label">REPOSITORY</span><strong>{e(report['repo']['name'])}</strong><span class="mono">{e('History HEAD ' + revision if head else revision)}</span></div>
   <button class="quick-trigger script-only" id="quick-trigger" type="button" aria-haspopup="dialog"><span>Find a file or view</span><kbd id="quick-shortcut">⌘ K</kbd></button>
-  <nav aria-label="Sections">{links}</nav>
+  <nav aria-label="Sections">{navigation}</nav>
   <div class="rail-bottom"><span class="snapshot-dot" aria-hidden="true"></span>Local snapshot <a href="#notes">Analysis limits ↗</a></div>
 </aside>
 <div class="workspace-main">
