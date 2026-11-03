@@ -10,10 +10,10 @@ from pathlib import Path
 from unittest import mock
 
 from helpers import TempRepo, git, write_tree
-from repolife import config, htmlreport, modules
-from repolife.analyze import analyze
-from repolife.cli import main
-from repolife.report import build_report
+from tessri import config, htmlreport, modules
+from tessri.analyze import analyze
+from tessri.cli import main
+from tessri.report import build_report
 from test_modules import CYCLE, PROJECT, brute_force_components, random_graph, run_cli
 
 REPO = Path(__file__).resolve().parent.parent
@@ -277,7 +277,7 @@ const data = JSON.parse(pick('data'));
 const ctx = {};
 vm.createContext(ctx);
 new vm.Script(pick('app')).runInContext(ctx);
-const core = ctx.RepolifeCore;
+const core = ctx.TessriCore;
 const jobs = JSON.parse(fs.readFileSync(targetsPath, 'utf8'));
 const out = jobs.map(([name, hops, policy = 'all']) => core.impactOf(data.explorer, name, hops, null, policy));
 process.stdout.write(JSON.stringify(out));
@@ -286,7 +286,7 @@ process.stdout.write(JSON.stringify(out));
 
 @unittest.skipUnless(shutil.which("node"), "node is needed to run the page's script")
 class ExplorerDifferentialTest(TempRepo):
-    """The page answers `impact` in the browser; it must give the numbers `repolife impact` gives."""
+    """The page answers `impact` in the browser; it must give the numbers `tessri impact` gives."""
 
     def check(self, a, targets, hops_list=(None, 1, 2), policies=('all',)):
         html = page_for(a)
@@ -324,7 +324,7 @@ class ExplorerDifferentialTest(TempRepo):
         self.check(a, targets, policies=('all', 'imports'))
 
     def test_unknown_plugin_evidence_and_bounded_reference_examples(self):
-        from repolife.analyzers.python import PythonAnalyzer
+        from tessri.analyzers.python import PythonAnalyzer
         from test_provenance import PYTHON, Stub
 
         write_tree(self.root, {**PYTHON, 'main.go': 'package main\n', **{
@@ -378,7 +378,7 @@ class CliTest(Committed):
 
     def test_other_formats_are_unchanged(self):
         self.assertEqual(json.loads(run_cli("scan", str(self.root), "--format", "json")[1])["schema_version"], 1)
-        self.assertIn("# repolife", run_cli("scan", str(self.root))[1])
+        self.assertIn("# Tessri", run_cli("scan", str(self.root))[1])
 
 
 if __name__ == "__main__":

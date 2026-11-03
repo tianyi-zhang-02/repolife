@@ -8,10 +8,10 @@ import time
 import unittest
 
 from helpers import TempRepo, git, write_tree
-from repolife import config, gitlog, triage
-from repolife.analyze import analyze
-from repolife.cli import main
-from repolife.report import build_report
+from tessri import config, gitlog, triage
+from tessri.analyze import analyze
+from tessri.cli import main
+from tessri.report import build_report
 
 ALICE = ("Alice Adams", "alice@example.com")
 BOB = ("Bob Brown", "bob@example.com")

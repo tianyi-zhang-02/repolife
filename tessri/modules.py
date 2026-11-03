@@ -180,7 +180,7 @@ def _contributors(area: Area) -> int:
 def _header(a: Analysis, kind: str) -> dict:
     return {
         "schema_version": SCHEMA_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": a.root.name},
         "kind": kind,

@@ -1,5 +1,5 @@
 import sys
 
-from .cli import main
+from tessri.cli import legacy_main
 
-sys.exit(main())
+sys.exit(legacy_main())

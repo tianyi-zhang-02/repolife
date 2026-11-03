@@ -1,6 +1,6 @@
 """A small JavaScript/TypeScript scanner: finds module specifiers without a parser.
 
-repolife has no dependencies, so there is no tree-sitter or TypeScript compiler to lean on.
+Tessri has no dependencies, so there is no tree-sitter or TypeScript compiler to lean on.
 Reading imports only needs the lexical layer: enough to tell code from strings, comments,
 template literals and regex literals, so `import` inside a comment or a string is not an import.
 """

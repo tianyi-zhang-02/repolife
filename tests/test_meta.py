@@ -15,9 +15,9 @@ from unittest import mock
 
 from helpers import TempRepo, git, write_tree
 
-from repolife import config, gitlog, meta, templates
-from repolife.analyze import analyze
-from repolife.cli import main
+from tessri import config, gitlog, meta, templates
+from tessri.analyze import analyze
+from tessri.cli import main
 
 FULL_ID = re.compile(r"^[0-9a-f]{40}$")
 TREE = {

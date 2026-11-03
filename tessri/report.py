@@ -131,9 +131,9 @@ def build_report(a: Analysis, full: bool = False) -> dict:
 
     caveats = [
         "Reachability is static. Dynamic dispatch, plugin discovery and consumers outside this repository are invisible: "
-        "treat ORPHAN as a candidate, and run `repolife why <file>` before deleting anything.",
+        "treat ORPHAN as a candidate, and run `tessri why <file>` before deleting anything.",
         "If this repository is a library, public modules that nothing inside it imports look orphaned. "
-        "List them under `keep` in .repolife.toml.",
+        "List them under `keep` in .tessri.toml.",
     ]
     if a.activity is None:
         caveats.append("No git history was available, so activity statuses are UNKNOWN.")
@@ -149,7 +149,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
 
     report = {
         "schema_version": SCHEMA_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": a.root.name},
         "meta": meta.of(a),

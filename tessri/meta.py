@@ -33,7 +33,7 @@ def block(
     ran, for a result that answered before analysing anything, so that an empty result never looks like a clean one."""
     out = {
         "schema_version": SCHEMA_VERSION,
-        "tool": {"name": "repolife", "version": __version__},
+        "tool": {"name": "tessri", "version": __version__},
         "generated_at": stamp(now),
         "repo": {"name": root.name, "root": str(root)},
         "git": {

@@ -6,8 +6,8 @@ import unittest
 from pathlib import Path
 
 from helpers import TempRepo, git, write_tree
-from repolife import config, since as sincemod, sinceview
-from repolife.since import CheckError
+from tessri import config, since as sincemod, sinceview
+from tessri.since import CheckError
 from test_modules import run_cli
 
 ALICE = ("Alice Adams", "alice@example.com")

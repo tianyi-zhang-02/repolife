@@ -1,4 +1,4 @@
-"""`repolife why` as data: `facts` holds everything the text says, the text is rendered from it, and
+"""`tessri why` as data: `facts` holds everything the text says, the text is rendered from it, and
 `--format json` prints it with the metadata block."""
 
 import contextlib
@@ -9,10 +9,10 @@ import unittest
 
 from helpers import TempRepo, git, write_tree
 
-from repolife import config
-from repolife.analyze import analyze
-from repolife.cli import main
-from repolife.explain import ORPHAN_ADVICE, TargetError, explain, facts, render, why_json
+from tessri import config
+from tessri.analyze import analyze
+from tessri.cli import main
+from tessri.explain import ORPHAN_ADVICE, TargetError, explain, facts, render, why_json
 
 ALICE = ("Alice", "alice@example.com")
 BOB = ("Bob", "bob@example.com")
@@ -25,7 +25,7 @@ TREE = {
     "tests/test_core.py": "import pkg.core\n",
     "docs/guide.md": "See pkg/core.py.\n",
     "CODEOWNERS": "pkg/ @alice\n",
-    ".repolife.toml": 'entry = ["scripts/run.py"]\n',
+    ".tessri.toml": 'entry = ["scripts/run.py"]\n',
 }
 
 

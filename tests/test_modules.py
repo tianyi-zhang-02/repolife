@@ -6,10 +6,10 @@ import unittest
 from datetime import datetime, timezone
 
 from helpers import TempRepo, git, write_tree
-from repolife import config, graphview, modules
-from repolife.analyze import analyze
-from repolife.cli import main
-from repolife.explain import TargetError
+from tessri import config, graphview, modules
+from tessri.analyze import analyze
+from tessri.cli import main
+from tessri.explain import TargetError
 
 PROJECT = {
     "app/__init__.py": "",

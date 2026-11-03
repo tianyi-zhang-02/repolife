@@ -162,8 +162,8 @@ def _review(rev: dict, gone: int, limit: int) -> list[str]:
 def markdown(rep: dict, limit: int = 40) -> str:
     s = rep["summary"]
     git = rep["git"]
-    lines = [f"# repolife report: {rep['repo']['name']}", ""]
-    meta = [f"generated {rep['generated_at']}", f"repolife {rep['tool']['version']}"]
+    lines = [f"# Tessri report: {rep['repo']['name']}", ""]
+    meta = [f"generated {rep['generated_at']}", f"tessri {rep['tool']['version']}"]
     if git["available"]:
         meta.append(f"git {git['head']} ({git['commits']:,} commits)")
     lines += [" · ".join(meta), ""]
@@ -240,5 +240,5 @@ def markdown(rep: dict, limit: int = 40) -> str:
         lines += _table(["File", "Code", "Last commit"], [[f"`{r['path']}`", _n(r["code"]), r["last_commit"] or "-"] for r in tests[:limit]], {1})
 
     lines += ["## Caveats", ""] + [f"- {c}" for c in rep["caveats"]] + [""]
-    lines += ["Verify a candidate with `repolife why <file>` before touching it.", ""]
+    lines += ["Verify a candidate with `tessri why <file>` before touching it.", ""]
     return "\n".join(lines)

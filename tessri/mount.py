@@ -1,6 +1,6 @@
-"""`repolife init`: mount repolife into any repository, new or existing.
+"""`tessri init`: mount tessri into any repository, new or existing.
 
-Safe to run repeatedly. Files repolife owns outright are created once and never overwritten
+Safe to run repeatedly. Files Tessri owns outright are created once and never overwritten
 without --force. Shared files (AGENTS.md, .gitignore) only ever get a clearly marked block or
 a single line, which later runs update in place.
 """
@@ -10,10 +10,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
-from . import templates
+from . import legacy, templates
 
-BEGIN = "<!-- repolife:begin -->"
-END = "<!-- repolife:end -->"
+BEGIN = "<!-- tessri:begin -->"
+END = "<!-- tessri:end -->"
 
 
 @dataclass
@@ -49,9 +49,11 @@ def _marked_block(root: Path, rel: str, body: str, dry_run: bool) -> Action:
         _write(path, block + "\n", dry_run)
         return Action(rel, "created")
     text = path.read_text(encoding="utf-8", errors="replace")
-    start, end = text.find(BEGIN), text.find(END)
-    if start != -1 and end > start:
-        new = text[:start] + block + text[end + len(END) :]
+    for begin, end_marker in ((BEGIN, END), (legacy.BEGIN, legacy.END)):  # a block written under the old name is replaced in place
+        start, end = text.find(begin), text.find(end_marker)
+        if start != -1 and end > start:
+            new = text[:start] + block + text[end + len(end_marker) :]
+            break
     else:
         new = text.rstrip("\n") + ("\n\n" if text.strip() else "") + block + "\n"
     if new == text:
@@ -73,13 +75,13 @@ def _ignore_line(root: Path, line: str, dry_run: bool) -> Action:
 
 
 def mount(root: Path, agents: set[str], ci: str | None, install_spec: str, force: bool = False, dry_run: bool = False) -> list[Action]:
-    actions = [_owned_file(root, ".repolife.toml", templates.CONFIG, force, dry_run)]
+    actions = [_owned_file(root, ".tessri.toml", templates.CONFIG, force, dry_run)]
     if "claude" in agents:
-        actions.append(_owned_file(root, ".claude/skills/repolife/SKILL.md", templates.SKILL, force, dry_run))
+        actions.append(_owned_file(root, ".claude/skills/tessri/SKILL.md", templates.SKILL, force, dry_run))
     if "agents" in agents:
         actions.append(_marked_block(root, "AGENTS.md", templates.AGENTS_BLOCK, dry_run))
     if ci == "github":
         workflow = templates.GITHUB_WORKFLOW.replace("__INSTALL_SPEC__", install_spec)
-        actions.append(_owned_file(root, ".github/workflows/repolife.yml", workflow, force, dry_run))
-    actions.append(_ignore_line(root, ".repolife/", dry_run))
+        actions.append(_owned_file(root, ".github/workflows/tessri.yml", workflow, force, dry_run))
+    actions.append(_ignore_line(root, ".tessri/", dry_run))
     return actions

@@ -1,4 +1,4 @@
-"""`repolife why <file>`: the evidence behind a file's verdict, for agents and humans verifying a candidate.
+"""`tessri why <file>`: the evidence behind a file's verdict, for agents and humans verifying a candidate.
 `facts` collects it as data, `explain` renders that data as text and `why_json` wraps it for `--format json`, so
 the two outputs cannot disagree."""
 
@@ -17,7 +17,7 @@ _REACH_TEXT = {
 ORPHAN_ADVICE = (
     "Before deleting: search the repo for the file's module name and public symbols (dynamic lookups, "
     "registries, external consumers), and run the test suite. If the file is intentionally public, add it "
-    "to `keep` in .repolife.toml."
+    "to `keep` in .tessri.toml."
 )
 
 
@@ -120,7 +120,7 @@ def facts(a: Analysis, target: str) -> dict:
 
 
 def render(f: dict) -> str:
-    """The text of `repolife why`, from `facts`."""
+    """The text of `tessri why`, from `facts`."""
     file, verdict = f["file"], f["verdict"]
     out = [f"{f['path']}  ({file['language']}, {file['code']} code lines)"]
 

@@ -1,0 +1,33 @@
+# The test suite on every push to main and every pull request. It needs git (always on the runner) and node for one
+# differential test that compares the JavaScript scanner with a real JS parse; that test is skipped without node.
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  unittest:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # one test analyses this repository's own history
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run the suite
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+        run: python -W error::ResourceWarning -m unittest discover -s tests

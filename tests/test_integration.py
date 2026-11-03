@@ -1,4 +1,4 @@
-"""`repolife integration`: install, update, status and remove with a receipt, never touching what the user wrote."""
+"""`tessri integration`: install, update, status and remove with a receipt, never touching what the user wrote."""
 
 import contextlib
 import io
@@ -11,14 +11,14 @@ from unittest import mock
 
 from helpers import TempRepo, write_tree
 
-from repolife import integration, templates
-from repolife.cli import main
-from repolife.integration import LOCK, PROFILES, RECEIPT, IntegrationError, run, status
-from repolife.mount import BEGIN, END, mount
+from tessri import integration, templates
+from tessri.cli import main
+from tessri.integration import LOCK, PROFILES, RECEIPT, IntegrationError, run, status
+from tessri.mount import BEGIN, END, mount
 
 PROJECT = {"src/app.py": "import src.lib\n", "src/lib.py": "x = 1\n", "README.md": "# demo\n", ".gitignore": "dist/\n"}
-SKILL = ".claude/skills/repolife/SKILL.md"
-CODEX = ".agents/skills/repolife/SKILL.md"
+SKILL = ".claude/skills/tessri/SKILL.md"
+CODEX = ".agents/skills/tessri/SKILL.md"
 
 
 def run_cli(*argv):
@@ -75,7 +75,7 @@ class InstallTest(Project):
         rec = self.receipt()
         self.assertEqual((rec["manifest_version"], rec["profiles"]), (1, ["claude", "codex", "agents"]))
         by = {t["profile"]: t for t in rec["targets"]}
-        self.assertEqual(by["claude"]["dirs_created"], [".claude", ".claude/skills", ".claude/skills/repolife"])
+        self.assertEqual(by["claude"]["dirs_created"], [".claude", ".claude/skills", ".claude/skills/tessri"])
         self.assertTrue(by["claude"]["created"] and by["agents"]["created"])
         self.assertEqual(by["agents"]["span"].encode(), after["AGENTS.md"])
         self.assertNotIn(str(self.root), (self.root / RECEIPT).read_text())  # no machine paths in the receipt
@@ -113,7 +113,7 @@ class InstallTest(Project):
         self.assertFalse((self.root / RECEIPT).exists())
 
     def test_legacy_init_block_is_a_conflict(self):
-        mount(self.root, {"agents"}, None, "repolife")
+        mount(self.root, {"agents"}, None, "tessri")
         before = tree(self.root)
         doc = run(self.root, "install", ["agents"])
         self.assertEqual(self.conflicts(doc), {"agents": "markers"})
@@ -171,7 +171,7 @@ class InstallTest(Project):
         self.assertFalse((self.root / "nowhere.md").exists())
 
     def test_user_file_with_a_temp_like_name_survives(self):
-        mine = self.root / ".claude/skills/repolife/.SKILL.md.repolife-tmp"
+        mine = self.root / ".claude/skills/tessri/.SKILL.md.tessri-tmp"
         write_tree(self.root, {mine.relative_to(self.root).as_posix(): "mine\n"})
         run(self.root, "install", ["claude"])
         self.assertEqual((mine.read_text(), (self.root / SKILL).read_text()), ("mine\n", templates.SKILL))
@@ -193,7 +193,7 @@ class UpdateTest(Project):
         self.assertEqual(tree(self.root), before)
 
     def test_update_refreshes_an_outdated_skill_and_block(self):
-        with mock.patch.object(templates, "SKILL", templates.SKILL + "\nNew paragraph.\n"), mock.patch.object(templates, "AGENTS_BLOCK", "## Repository health (repolife)\n\nNew text.\n"):
+        with mock.patch.object(templates, "SKILL", templates.SKILL + "\nNew paragraph.\n"), mock.patch.object(templates, "AGENTS_BLOCK", "## Repository health (tessri)\n\nNew text.\n"):
             self.assertEqual({r["profile"]: r["state"] for r in status(self.root)["targets"]}, {"claude": "installed-outdated", "agents": "installed-outdated"})
             doc = run(self.root, "update", None)
             self.assertEqual(self.actions(doc), {"claude": "update", "agents": "update"})
@@ -207,7 +207,7 @@ class UpdateTest(Project):
     def test_edits_outside_the_block_survive_an_update(self):
         agents = self.root / "AGENTS.md"
         agents.write_bytes(agents.read_bytes() + b"\nMy own section after the block.\n")
-        with mock.patch.object(templates, "AGENTS_BLOCK", "## Repository health (repolife)\n\nNew text.\n"):
+        with mock.patch.object(templates, "AGENTS_BLOCK", "## Repository health (tessri)\n\nNew text.\n"):
             doc = run(self.root, "update", ["agents"])
         self.assertEqual(self.actions(doc), {"agents": "update"})
         data = agents.read_bytes()
@@ -218,7 +218,7 @@ class UpdateTest(Project):
         skill = self.root / SKILL
         skill.write_text(skill.read_text() + "my note\n")
         before = tree(self.root)
-        with mock.patch.object(templates, "AGENTS_BLOCK", "## Repository health (repolife)\n\nNew text.\n"):
+        with mock.patch.object(templates, "AGENTS_BLOCK", "## Repository health (tessri)\n\nNew text.\n"):
             doc = run(self.root, "update", None)
         self.assertEqual(self.conflicts(doc), {"claude": "modified"})
         self.assertEqual(self.actions(doc), {"agents": "update"})
@@ -226,7 +226,7 @@ class UpdateTest(Project):
 
     def test_edited_block_is_a_conflict(self):
         agents = self.root / "AGENTS.md"
-        agents.write_bytes(agents.read_bytes().replace(b"repolife scan", b"repolife SCAN", 1))
+        agents.write_bytes(agents.read_bytes().replace(b"tessri scan", b"tessri SCAN", 1))
         doc = run(self.root, "update", None)
         self.assertEqual(self.conflicts(doc), {"agents": "modified"})
         self.assertEqual(status(self.root)["targets"][1]["state"], "user-modified")
@@ -238,7 +238,7 @@ class UpdateTest(Project):
         doc = run(self.root, "update", ["claude"])
         self.assertEqual(self.actions(doc), {"claude": "create"})
         self.assertEqual((self.root / SKILL).read_text(), templates.SKILL)
-        self.assertEqual(self.receipt()["targets"][0]["dirs_created"], [".claude", ".claude/skills", ".claude/skills/repolife"])
+        self.assertEqual(self.receipt()["targets"][0]["dirs_created"], [".claude", ".claude/skills", ".claude/skills/tessri"])
 
     def test_unrecorded_profile_is_an_error(self):
         with self.assertRaises(IntegrationError):
@@ -261,7 +261,7 @@ class RemoveTest(Project):
     def test_remove_keeps_directories_it_did_not_create(self):
         write_tree(self.root, {".claude/settings.json": "{}\n"})
         run(self.root, "install", ["claude"])
-        self.assertEqual(self.receipt()["targets"][0]["dirs_created"], [".claude/skills", ".claude/skills/repolife"])
+        self.assertEqual(self.receipt()["targets"][0]["dirs_created"], [".claude/skills", ".claude/skills/tessri"])
         run(self.root, "remove", None)
         self.assertEqual(sorted(p.name for p in (self.root / ".claude").iterdir()), ["settings.json"])
 
@@ -270,7 +270,7 @@ class RemoveTest(Project):
         write_tree(self.root, {".claude/skills/other/SKILL.md": "---\nname: other\n---\n"})
         run(self.root, "remove", None)
         self.assertFalse((self.root / SKILL).exists())
-        self.assertFalse((self.root / ".claude/skills/repolife").exists())
+        self.assertFalse((self.root / ".claude/skills/tessri").exists())
         self.assertTrue((self.root / ".claude/skills/other/SKILL.md").exists())
 
     def test_subset_removal_keeps_the_rest(self):
@@ -303,7 +303,7 @@ class RemoveTest(Project):
         (self.root / SKILL).unlink()
         write_tree(self.root, {".claude/skills/other.md": "x\n"})
         run(self.root, "remove", None)
-        self.assertFalse((self.root / ".claude/skills/repolife").exists())
+        self.assertFalse((self.root / ".claude/skills/tessri").exists())
         self.assertTrue((self.root / ".claude/skills/other.md").exists())
 
     def test_removing_a_profile_that_is_not_recorded_is_a_no_op(self):
@@ -333,7 +333,7 @@ class RemoveTest(Project):
         self.assertEqual((self.root / "AGENTS.md").read_bytes(), b"")
 
     def test_remove_without_a_receipt_is_a_no_op(self):
-        mount(self.root, {"claude", "agents"}, None, "repolife")  # legacy init: familiar files, no receipt
+        mount(self.root, {"claude", "agents"}, None, "tessri")  # legacy init: familiar files, no receipt
         before = tree(self.root)
         for profiles in (None, ["claude"]):
             doc = run(self.root, "remove", profiles)
@@ -350,10 +350,10 @@ class StatusTest(Project):
         self.assertEqual((doc["installed"], doc["targets"], doc["attention"]), (False, [], False))
         code, out, _ = run_cli("integration", "status", str(self.root))
         self.assertEqual(code, 0)
-        self.assertIn("No repolife integration receipt", out)
+        self.assertIn("No Tessri integration receipt", out)
 
     def test_legacy_files_are_unmanaged(self):
-        mount(self.root, {"claude", "agents"}, None, "repolife")
+        mount(self.root, {"claude", "agents"}, None, "tessri")
         doc = status(self.root)
         self.assertEqual(doc["installed"], False)
         self.assertEqual({r["profile"]: r["state"] for r in doc["targets"]}, {"claude": "unmanaged", "agents": "unmanaged"})
@@ -397,7 +397,7 @@ class ReceiptTest(Project):
     def test_forged_target_path(self):
         target = {"profile": "claude", "path": "../outside.md", "kind": "file", "sha256": "0" * 64, "created": True, "dirs_created": []}
         self.write_receipt(json.dumps({"manifest_version": 1, "targets": [target]}))
-        with self.assertRaisesRegex(IntegrationError, "only .claude/skills/repolife/SKILL.md"):
+        with self.assertRaisesRegex(IntegrationError, "only .claude/skills/tessri/SKILL.md"):
             run(self.root, "remove", None)
 
     def test_forged_directory_and_duplicate_profile(self):
@@ -503,7 +503,7 @@ class CliTextTest(Project):
     def test_dry_run_text(self):
         code, out, _ = run_cli("integration", "install", str(self.root), "--agent", "claude", "--dry-run")
         self.assertEqual(code, 0)
-        self.assertIn("would create  .claude/skills/repolife/SKILL.md (claude)", out)
+        self.assertIn("would create  .claude/skills/tessri/SKILL.md (claude)", out)
         self.assertIn(f"would create  {RECEIPT}", out)
         self.assertIn("Dry run: nothing was written.", out)
         self.assertEqual(sorted(p.name for p in self.root.iterdir()), [".gitignore", "README.md", "src"])
@@ -512,7 +512,7 @@ class CliTextTest(Project):
         write_tree(self.root, {CODEX: "foreign\n"})
         code, out, _ = run_cli("integration", "install", str(self.root), "--agent", "codex")
         self.assertEqual(code, 1)
-        self.assertIn("conflict      .agents/skills/repolife/SKILL.md (codex): a file already exists", out)
+        self.assertIn("conflict      .agents/skills/tessri/SKILL.md (codex): a file already exists", out)
         self.assertIn("nothing was written", out)
 
     def test_missing_or_non_directory_project_exits_2(self):
@@ -523,12 +523,12 @@ class CliTextTest(Project):
 
     def test_skill_profiles_share_one_source(self):
         self.assertEqual(PROFILES["claude"].content(), PROFILES["codex"].content())
-        self.assertNotIn(".repolife/report.json", templates.SKILL)
+        self.assertNotIn(".tessri/report.json", templates.SKILL)
         self.assertNotIn("uvx", templates.SKILL)
         self.assertIn("unavailable", templates.SKILL)
         self.assertNotIn("--fail-on block     #", templates.SKILL)  # the routine example does not gate
         self.assertIn("do not start every task with a full scan", templates.SKILL)
-        self.assertLess(templates.SKILL.index("repolife impact <path>"), templates.SKILL.index("## Run it"))
+        self.assertLess(templates.SKILL.index("tessri impact <path>"), templates.SKILL.index("## Run it"))
 
 
 if __name__ == "__main__":
