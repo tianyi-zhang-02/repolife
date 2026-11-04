@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tessri</title>
+<meta name="description" content="Keep code understandable. Tessri reads a codebase and its git history, offline and with nothing else installed, and answers the questions a maintainer asks: how the system fits together, what a change can reach, what nobody maintains, and what a change did to the structure.">
+<meta property="og:title" content="Tessri">
+<meta property="og:description" content="Keep code understandable. Structure, impact, review focus and ownership for a codebase, offline, with evidence for every claim.">
+<meta property="og:type" content="website">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="tessri.css">
+<script>try{var t=localStorage.getItem("tessri-theme");if(t)document.documentElement.setAttribute("data-theme",t)}catch(e){}</script>
+</head>
+<body>
+
+<header class="wrap top">
+  <a class="wordmark" href="./" aria-label="Tessri home">
+    {{mark}}
+    <span>tessri<span class="dot">.</span></span>
+  </a>
+  <nav aria-label="Site">
+    <a href="guide/">Guide</a>
+    <a href="{{repo}}">GitHub</a>
+    {{theme_button}}
+  </nav>
+</header>
+
+<main class="wrap">
+
+  <section class="hero">
+    <h1>Keep code understandable.</h1>
+    <p class="lede">Tessri reads a codebase and its git history, offline and with nothing else installed, and answers the questions a maintainer asks of a system that grows faster than anyone can read it.</p>
+    <div class="actions">
+      <a class="button" href="guide/getting-started.html">Get started</a>
+      <a class="button quiet" href="guide/">Read the guide</a>
+    </div>
+    <div class="install">
+      <code><span class="prompt">$ </span>pip install git+{{repo}}</code>
+      <button class="copy" type="button" data-copy="pip install git+{{repo}}">Copy</button>
+    </div>
+    <p class="note">Python 3.11 or newer, no dependencies. To run it once without installing: <code>uvx --from git+{{repo}} tessri scan .</code></p>
+  </section>
+
+  <section class="band" id="questions">
+    <span class="label">What it answers</span>
+    <h2>Four questions, answered from one picture of the code and its history.</h2>
+    <div class="questions">
+      <div>
+        <h3>How does the system fit together?</h3>
+        <p>The modules, the cycles, and the few dependencies that would break them if cut.</p>
+        <span class="cmd"><code>tessri graph</code></span>
+      </div>
+      <div>
+        <h3>What can this change reach?</h3>
+        <p>The files that depend on it, the tests that reach it, and who is able to review it.</p>
+        <span class="cmd"><code>tessri impact &lt;path&gt;</code></span>
+      </div>
+      <div>
+        <h3>What does nothing reach, and what does nobody maintain?</h3>
+        <p>Every file's status from entry points, tests and configs; owners from history, and who went quiet.</p>
+        <span class="cmd"><code>tessri scan .</code></span>
+      </div>
+      <div>
+        <h3>What did this change do to the structure?</h3>
+        <p>New orphans, new cycles, imports of deleted files, changed code nobody active maintains. Markdown, JSON or SARIF, with an exit code for CI.</p>
+        <span class="cmd"><code>tessri check --since main</code></span>
+      </div>
+    </div>
+  </section>
+
+  <section class="band" id="example">
+    <span class="label">A complete example</span>
+    <h2>What can a change to one file affect?</h2>
+    <p class="intro">Real output on Tessri's own repository, as the Markdown renders.</p>
+    <div class="example">
+      <div class="panel">
+{{example}}
+      </div>
+      <p class="after">That's it. <code>tessri why tessri/graph.py</code> shows the evidence behind any line of it, and <code>--edges imports</code> keeps to the recognized imports and leaves the string references at the frontier.</p>
+    </div>
+  </section>
+
+  <section class="band" id="how">
+    <span class="label">How does it work?</span>
+    <h2>One pass over the files and the history, then one view per question.</h2>
+    <div class="how">
+      <div>
+        <span class="step">01</span>
+        <h3>Read</h3>
+        <p>Lists the files, parses Python with Python's own parser and JavaScript and TypeScript with its own scanner, and reads configs, scripts and docs for the files they name.</p>
+      </div>
+      <div>
+        <span class="step">02</span>
+        <h3>Join</h3>
+        <p>Builds the import graph with the kind of evidence behind every edge, and reads from git who changed what, following files through renames.</p>
+      </div>
+      <div>
+        <span class="step">03</span>
+        <h3>Answer</h3>
+        <p>Each command is one view of that picture: reachability, ownership, module graph, impact, triage and the check of a change.</p>
+      </div>
+    </div>
+    <p class="intro">No model, no network, no service, and it never edits your code. The order <code>triage</code> puts files in was backtested on real history; the composite risk score we tried did not beat its parts, so there is none.</p>
+  </section>
+
+  <section class="band" id="evidence">
+    <span class="label">Evidence, not adjectives</span>
+    <h2>Every claim can be traced, and what the analysis cannot see it says it cannot see.</h2>
+    <div class="evidence">
+      <blockquote><b>17 test files</b> reaching it (candidates to run, not runs)<span class="src">tessri impact</span></blockquote>
+      <blockquote>12 names in configs or scripts fit several files each and so name none of them: <b>utils.py (15)</b>, config.py (12), …<span class="src">tessri scan, caveats</span></blockquote>
+      <blockquote>Dependencies are static imports between files of this repository. Dynamic loading, registries and consumers outside it are invisible, so a clean result does <b>not</b> mean nothing else depends on the change.<span class="src">tessri check</span></blockquote>
+    </div>
+  </section>
+
+  <section class="band" id="getting-started">
+    <span class="label">Getting started</span>
+    <h2>Three steps.</h2>
+    <ol class="steps">
+      <li><b>Scan a repository.</b> <code>tessri scan .</code> prints the report; <code>--format html --out report.html</code> writes one offline page with the explorer.</li>
+      <li><b>Ask before, during and after a change.</b> <code>tessri impact &lt;path&gt;</code> before, <code>tessri triage --since main</code> to review one, <code>tessri check --since main</code> when it is done.</li>
+      <li><b>Give it to your agent.</b> <code>tessri integration install --agent claude</code> (or <code>codex</code>) installs the skill with a receipt; <code>tessri integration remove</code> takes it out again.</li>
+    </ol>
+  </section>
+
+</main>
+
+<footer class="wrap foot">
+  <nav aria-label="Footer">
+    <a href="guide/">Guide</a>
+    <a href="guide/integration.html">Integration</a>
+    <a href="guide/json.html">JSON</a>
+    <a href="guide/limits.html">Limits</a>
+    <a href="{{repo}}/blob/main/CHANGELOG.md">Changelog</a>
+    <a href="{{repo}}">GitHub</a>
+  </nav>
+  <span>MIT. Formerly repolife; the <a href="guide/formerly-repolife.html">old name works through 0.2.x</a>.</span>
+</footer>
+
+{{scripts}}
+</body>
+</html>
