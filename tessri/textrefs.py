@@ -117,19 +117,38 @@ def scan_setup_cfg(text: str) -> TextScan:
     return scan
 
 
+# Names Python gives to every package, not to a file in particular: a bare one in a string or a config names nothing.
+UNNAMED = frozenset({"__init__.py", "__main__.py"})
+
+
 class PathIndex:
-    """Resolve a path-like token (`./examples/run.py`, `run.py`) to repository files."""
+    """Resolve a path-like token (`./examples/run.py`, `run.py`) to repository files.
+
+    An exact path is itself. Otherwise the token is matched as a path suffix, because the directory a config file
+    is read from is unknown, and a suffix that fits exactly one file names it. A suffix that fits several files
+    names none of them: `utils.py` in a repository with ninety of them says nothing about any one of them, and
+    treating it as all ninety made them all reachable and gave each a string edge. `ambiguous` records those
+    tokens and how many files they fit, for a report to say what was not resolved. `allow_many` keeps the old
+    behaviour for a caller that means every match, such as an `entry` the user wrote in the configuration."""
 
     def __init__(self, paths: Iterable[str]):
         self.paths = set(paths)
         self._by_name: dict[str, list[str]] = defaultdict(list)
         for p in self.paths:
             self._by_name[posixpath.basename(p)].append(p)
+        self.ambiguous: dict[str, int] = {}
 
-    def resolve(self, token: str) -> set[str]:
+    def resolve(self, token: str, allow_many: bool = False) -> set[str]:
         while token.startswith(("./", "../", "/")):  # the config file's own directory is unknown, so match by suffix
             token = token[token.index("/") + 1 :]
         if token in self.paths:
             return {token}
+        name = posixpath.basename(token)
+        if name in UNNAMED and "/" not in token:
+            return set()
         suffix = "/" + token
-        return {p for p in self._by_name.get(posixpath.basename(token), ()) if p.endswith(suffix)}
+        hits = {p for p in self._by_name.get(name, ()) if p.endswith(suffix)}
+        if len(hits) > 1 and not allow_many:
+            self.ambiguous[token] = len(hits)
+            return set()
+        return hits

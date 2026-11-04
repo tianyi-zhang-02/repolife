@@ -73,3 +73,8 @@ Tests are entry points of their own: code reached only from tests is reported as
 Deliberately **not** evidence of use, for any language: tool configs that merely list files (`pyrefly.toml`,
 `mypy.ini`, `.coveragerc`, lint sections), JSON data, docs, and anything under `docs/`/`reports/`.
 Docs and data count as a *mention*, which lowers confidence but does not rescue a file.
+
+A file name found in a config, a script or a string names a file only when it fits exactly one. A bare `utils.py`
+in a repository with ninety of them names none of them, and the report's caveats list such names with how many
+files each fits; give the reference a directory (`pkg/utils.py`) or list the files under `entry`, which is taken to
+mean every file it fits because you wrote it. The bare `__init__.py` and `__main__.py` never name a file.

@@ -45,6 +45,7 @@ class Graph:
     provenance: dict[str, dict[str, str]] = field(default_factory=dict)  # file -> target -> kind of evidence (analyzers.KINDS); "unknown" when the analyzer gave none
     prod_parent: dict[str, str | None] = field(default_factory=dict)
     test_parent: dict[str, str | None] = field(default_factory=dict)
+    ambiguous: dict[str, int] = field(default_factory=dict)  # a name configs or scripts used that fits several files -> how many; resolved to none
 
     def kind(self, src: str, dst: str) -> str:
         """The strongest evidence an analyzer recorded for the edge src -> dst; "unknown" when it recorded none."""
@@ -117,13 +118,14 @@ def build(
         for t in targets:
             bucket[t].add(src)
 
+    g.ambiguous = dict(paths.ambiguous)
     for target, sources in g.config_refs.items():
         g.roots.setdefault(target, []).append(f"config-ref: {sorted(sources)[0]}")
     for path in g.analyzed:
         if inventory.matches(path, keep):
             g.roots.setdefault(path, []).append("keep")
-    for item in entry:
-        for path in resolve(item) | paths.resolve(item):
+    for item in entry:  # written by the user, so a name several files share means every one of them
+        for path in resolve(item) | paths.resolve(item, allow_many=True):
             g.roots.setdefault(path, []).append(f"entry: {item}")
 
     for src, targets in g.edges.items():
