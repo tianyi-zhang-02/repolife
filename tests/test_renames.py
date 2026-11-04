@@ -102,12 +102,14 @@ class FollowTest(Moves):
         self.assertEqual(self.days(act.files["d.py"].first), 10)  # nothing of c.py survived, so git saw a delete and an add
         self.assertEqual(self.days(act.files["c.py"].last), 10)
 
-    def test_history_up_to_a_base_uses_the_names_at_that_base(self):
+    def test_history_up_to_a_base_stops_there_but_uses_the_names_the_tree_has_now(self):
         self.commit({"a.py": BODY}, ALICE, 300)
         git(self.root, "tag", "base")
         self.move("a.py", "b.py", BOB, 20)
-        self.assertEqual(sorted(self.load(rev="base").files), ["a.py"])
-        self.assertEqual(sorted(self.load().files), ["b.py"])
+        at_base = self.load(rev="base")
+        self.assertEqual(sorted(at_base.files), ["b.py"])  # the file is called b.py now, so its history is read under that name
+        self.assertEqual((at_base.files["b.py"].commits_year, set(at_base.credit["b.py"])), (1, {"alice adams"}))  # the move came after the base
+        self.assertEqual((sorted(self.load().files), self.load().files["b.py"].commits_year), (["b.py"], 2))
 
     def test_the_verdict_and_why_see_the_whole_history(self):
         self.commit({"a.py": BODY, "main.py": "import a\n"}, ALICE, 400)

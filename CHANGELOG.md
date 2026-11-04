@@ -50,6 +50,17 @@ Also in this version:
   resolves to nothing, the scan's caveats list the names configs and scripts used with how many files each fits, and
   an `entry` in the configuration still means every file it fits. The bare `__init__.py` and `__main__.py` never
   name a file. Verdicts on that repository did not change; a third of its `string` edges were this.
+- `check` and `triage` follow the renames git detects. A moved file is one changed file under its new name, with the
+  lines edited on the way (a pure move has none) and its old path as `from`; the summary counts it under `moved`.
+  `check` compares the two sides under the new names, so a renamed package keeps its cycles, dependencies and orphans
+  instead of reporting them gone and new again; a file moved but still imported under its old name by a file the change
+  did not touch is a `dangling-import` (`moved_to` names the new path); and moved code keeps its maintainers for the
+  no-active-owner check, which used to pass it over for lack of history. `triage` ranks a moved file by the history of
+  its old name instead of as a new file. History read for a dirty tree follows an uncommitted `git mv` the same way,
+  and history read up to the base of a change is read under the names the tree has now. Across this repository's own
+  rename, `check` went from 84 code files (37 added, 31 deleted), 17,292 lines, a false new cycle and a false resolved
+  one to 53 code files (6 added, 16 modified, 31 moved), 1,790 lines and no finding; `triage` had ranked the twelve
+  deleted `repolife/*.py` paths first and now ranks the moved files by their history.
 
 ## 0.1.0
 

@@ -12,6 +12,8 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import inventory
+
 HALF_LIFE_DAYS = 365  # when crediting ownership, a commit loses half its weight per year
 BULK_FILES = 300  # a commit touching this many files (mass reformat, vendor drop, first import) says little about who maintains each one
 _BOT = re.compile(r"\[bot\]|^(?:dependabot|renovate|github-actions|pre-commit-ci)\b", re.I)
@@ -152,6 +154,82 @@ def is_ignored(name: str, email: str, patterns: Sequence[str]) -> bool:
     return any(fnmatch.fnmatchcase(v.lower(), p.lower()) for p in patterns for v in (name, email))
 
 
+@dataclass
+class FileChange:
+    """What a change did to one file, between a revision and the working tree."""
+
+    added: int
+    deleted: int
+    state: str  # "added" | "modified" | "deleted" | "moved"
+    origin: str | None = None  # a moved file's path at the revision
+
+    @property
+    def lines(self) -> int:
+        return self.added + self.deleted
+
+
+def _entries(records: list[str]) -> Iterator[tuple[str, str, str | None]]:
+    """(status, path, path before or None) from a `--name-status -M -z` listing, in which a rename or copy is the
+    status, the old name and the new name as records of their own."""
+    i = 0
+    while i + 1 < len(records):
+        status = records[i]
+        if status[:1] in ("R", "C") and i + 2 < len(records):
+            yield status, records[i + 2], records[i + 1]
+            i += 3
+        else:
+            yield status, records[i + 1], None
+            i += 2
+
+
+def renames(root: Path, rev: str = "HEAD") -> dict[str, str]:
+    """Path at `rev` -> path in the working tree, for the files git sees as moved since `rev` (`-M`, its default
+    similarity). Empty when nothing moved or git cannot tell."""
+    text = _git_text(root, "diff", "--relative", "--name-status", "-M", "-z", rev)
+    if not text:
+        return {}
+    return {old: new for status, new, old in _entries(text.split("\0")) if old is not None and status.startswith("R")}
+
+
+def diff(root: Path, rev: str) -> dict[str, FileChange] | None:
+    """Path -> what changed between `rev` and the working tree, untracked files included as additions of their line
+    count. A file git sees as moved is one entry under its new name with `origin`, and its lines are the edits made on
+    the way, so a pure move has none. None when git cannot read the diff."""
+    names = _git_text(root, "diff", "--relative", "--name-status", "-M", "-z", rev)
+    stats = _git_text(root, "diff", "--relative", "--numstat", "-M", "-z", rev)
+    others = _git_text(root, "ls-files", "--others", "--exclude-standard", "-z")
+    if names is None or stats is None or others is None:
+        return None
+    out: dict[str, FileChange] = {}
+    for status, path, old in _entries(names.split("\0")):
+        moved = old is not None and status.startswith("R")
+        state = "moved" if moved else {"A": "added", "C": "added", "D": "deleted"}.get(status[:1], "modified")
+        out[path] = FileChange(0, 0, state, old if moved else None)
+    records = stats.split("\0")
+    i = 0
+    while i < len(records):
+        record = records[i]
+        i += 1
+        if not record:
+            continue
+        added, _, rest = record.partition("\t")
+        deleted, _, path = rest.partition("\t")
+        if not path and i + 1 < len(records):  # a rename: the old and the new name follow as records of their own
+            path = records[i + 1]
+            i += 2
+        counts = (int(added), int(deleted)) if added.isdigit() and deleted.isdigit() else (0, 0)  # binary files count no lines
+        change = out.get(path)
+        if change is None:
+            out[path] = FileChange(*counts, "modified")
+        else:
+            change.added, change.deleted = counts
+    for path in others.split("\0"):
+        if path and path not in out:
+            text = inventory.read_text(root / path)
+            out[path] = FileChange(len(text.splitlines()) if text else 0, 0, "added")
+    return out
+
+
 class _Names:
     """The name a file has at the revision read, for every name it had earlier. History is read newest first, so when
     a commit that renamed `old` to `new` goes by, every older mention of `old` belongs to the file now called whatever
@@ -225,9 +303,10 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
     Paths are relative to `root` (`--relative`), so a sub-directory of a larger
     repository is analysed on its own history. Merge commits list no files. The
     renames git detects (`-M`, its default similarity) are followed, so a moved
-    file keeps its history under its current name; a move across the `--relative`
-    boundary is an addition. Names and emails go through `.mailmap`, so one
-    person with several addresses can be merged.
+    file keeps its history under its current name, the name it has in the working
+    tree: a move made since `rev`, committed or not, is read from the diff first.
+    A move across the `--relative` boundary is an addition. Names and emails go
+    through `.mailmap`, so one person with several addresses can be merged.
     """
     cmd = [
         "git", "-c", "core.quotepath=false", "-C", str(root), "log",
@@ -247,6 +326,8 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
     bulk: dict[str, dict[str, float]] = {}  # credit from bulk commits, used only for files nothing else touched
     commits = 0
     names = _Names()
+    for old, new in renames(root, rev).items():  # the working tree's names come first: history is read under them
+        names.renamed(old, new)
     assert proc.stdout is not None
     with proc:  # closes the pipe and reaps the process
         for when, who, email, subject, entries in _commits(proc.stdout):
@@ -333,6 +414,8 @@ def changes(root: Path, now: float, days: int, ignore_authors: Sequence[str] = (
     found: list[Change] = []
     current: Change | None = None
     names = _Names()
+    for old, new in renames(root).items():  # an uncommitted move: lines count under the name the tree has now
+        names.renamed(old, new)
     records = body.split("\0")
     i = 0
     while i < len(records):
