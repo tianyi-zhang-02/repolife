@@ -1,0 +1,76 @@
+# Check what a change did to the structure
+
+`tessri check --since <base>` compares a branch with its base and reports what the change did to the structure, with
+an exit code for CI and SARIF for tools that read it.
+
+```bash
+tessri check --since main                  # a branch, judged from where it parted from main, plus uncommitted work
+tessri check                               # only uncommitted work
+tessri check --since main --fail-on block  # exit 1 when something is certain to break
+tessri check --since main --format sarif --out check.sarif   # the same findings for tools that read SARIF
+```
+
+`scan` describes a repository as it is; `check` says what a change did to it. It reads the base of the change straight
+from git objects into a scratch directory (the repository is not touched), analyses it and the working tree with the
+same settings, and compares them. Triage says which files to look at first; this says what the change did to the
+structure. They answer different questions and work together.
+
+| Finding | Severity | What it means |
+|---|---|---|
+| `dangling-import` | block | a file the change deleted or moved is still imported by a file the change did not touch |
+| `new-cycle`, `cycle-grew` | warn | modules that were not in a loop now are, or a cycle absorbed more modules; the new dependency that closed it is named |
+| `new-orphan` | warn | a new file nothing reaches, or a file the change cut the last link to (`stranded`, with what used to reach it); under `scripts/`, `examples/` and the like it is only a note, since those are run by hand |
+| `no-active-owner` | warn | changed code nobody active maintains. History is read up to the base, so the author's own commits do not make them the owner |
+| `new-dependency`, `orphan-resolved`, `cycle-resolved` | info | the other differences, the good ones too |
+
+```text
+$ tessri check --since main
+# Change check: demo-check
+
+`main` (9a0025443) to d6d893879: 4 files changed, 4 of them code (2 added, 1 modified, 1 deleted), **11** lines.
+
+**1 block, 3 warn, 1 info.**
+
+- **block**: `util/money.py` was deleted but is still imported
+  Untouched by this change, still importing it: `billing/invoices.py`
+  Do: Restore the file, or update every importer in the same change.
+- **warn**: Modules `billing`, `util` now depend on each other
+  Because of the new dependency `util` → `billing`, 1 import (for example `util/tax.py` imports `billing/invoices.py`).
+- **warn**: 2 new files that nothing reaches
+  Files: `billing/helpers.py`, `util/tax.py`
+- **warn**: 1 changed file nobody active maintains
+  Files: `legacy/rates.py`
+  Do: Have a human who knows the code look before merging, or assign an owner. A person has to decide this.
+```
+
+`--fail-on block` exits 1 for `dangling-import` only; `--fail-on warn` also for the warnings; the default never fails.
+`--format json` gives the same findings with their evidence (`orphans`, `cycles`, `dependencies`, `dangling_imports`,
+`unowned`, `changed_files`; `kind` is `change-check`) for an agent to act on.
+
+`--format sarif` writes the same check as a [SARIF 2.1.0](https://docs.oasis-open.org/sarif/sarif/v2.1.0/sarif-v2.1.0.html)
+log, for editors and services that already read that format. It is a rendering, not a second analysis: one finding
+becomes one result, in the same order, under a fixed rule per kind (`tessri/dangling-import`, `tessri/new-orphan`,
+…); `block`, `warn` and `info` become `error`, `warning` and `note`, and the observations (`new-dependency`,
+`orphan-resolved`, `cycle-resolved`) are `kind: informational` with `level: none` rather than failures. The whole
+finding, `files` and `needs_human` included, sits in the result's `properties["tessri/finding"]`, and the check's
+`meta`, `change`, `summary` and `notes` in the run's `properties["tessri/check"]`, so the identity of the comparison
+travels with the file. The evidence is file-level, so a location names a file and never a line: the first path of a
+finding that still exists and stays inside the analysed root is the primary location, the others are related
+locations, and a finding with no usable path has no location at all rather than an invented one. Paths are URI-encoded
+relative to `originalUriBaseIds.TESSRI_ROOT`, the directory that was analysed. Nothing is uploaded or configured, and
+no fingerprints are generated. Two limits to know before wiring it anywhere. First, GitHub code scanning rejects a
+whole log that contains a result without a location (observed on a real upload, 2026-11-01), and `new-dependency`,
+`cycle-resolved` and a cycle finding with no example file have none. For that consumer add `--locationless omit`: those
+findings leave `results` and move whole into the run's `properties["tessri/locationless"].omitted`, which also
+records their `count` and the `policy` in force, so nothing is dropped and nothing gets an invented location. The
+default `keep` leaves them in `results`, and `--fail-on` counts findings, not displayed results, so the exit code is the
+same under both. Second, a check compares one change with one base, so feeding it into a persistent alert category can
+make an old repository-wide problem look fixed when a later change simply did not touch it. `--fail-on` keeps its
+meaning: with `block` the exit code is 1 and the document is still complete. Copyable shell and Python recipes for CI
+artifacts, test selection and gates are in [docs/workflow-recipes.md](../workflow-recipes.md).
+
+Only what static imports show is compared, so a clean result is not proof that nothing else depends on the change, and
+a `block` is certain only for importers the change left untouched. Both sides are cut into modules the same way, so a
+file added or removed cannot move a boundary and create a dependency that is not there. Renames are not followed: a
+moved file is a deletion and an addition. Files the analysis does not read (symlinks, submodules, anything above the
+size limit, anything excluded) are not part of either side.
