@@ -12,7 +12,8 @@ What the analysis cannot see, it says it cannot see. This is the list.
 - Git activity needs history: a shallow clone truncates it, and a repository with no commits yet
   reports statuses as `UNKNOWN`. A moved file keeps its history when git recognises the move (its default
   similarity threshold); a file rewritten beyond recognition when moved starts over, and a path re-created after a
-  move is a new file. `triage` and `check` still see a move as a deletion and an addition.
+  move is a new file. `triage` and `check` follow the same moves, committed or not, as long as `git mv` or `git add`
+  has told git about them; a renamed file that was not added is a deletion and an untracked addition.
 - The HTML explorer's script is exercised against the Python implementation, but the page's sorting and filtering
   are checked by hand in a browser, not by an automated test.
 - The module graph is static imports between Python and JavaScript/TypeScript files. A package that re-exports

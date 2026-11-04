@@ -16,6 +16,7 @@ import dataclasses
 import subprocess
 import tempfile
 import time
+from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -33,7 +34,7 @@ NOTES = [
     "Dependencies are static imports between files of this repository. Dynamic loading, registries and consumers outside it are invisible, "
     "so a clean result does not mean nothing else depends on the change.",
     "Orphans, cycles and imports are compared between the base of the change and the working tree with the same settings; modules are the same "
-    "directories on both sides.",
+    "directories on both sides, and a file git sees as moved is one file under its new name on both sides.",
     "Ownership is read from history up to the base, so the author of the change does not count as having maintained what they changed.",
 ]
 
@@ -70,25 +71,42 @@ def resolve_base(root: Path, since: str) -> tuple[str, str, str]:
     return base, head, _git(root, "rev-parse", "--show-prefix").strip()
 
 
-def changed_files(root: Path, base: str) -> dict[str, tuple[int, int, str]]:
-    """path -> (lines added, lines deleted, "added" | "modified" | "deleted") between `base` and the working tree,
-    untracked files included. Renames are not followed: they show as a deletion and an addition."""
-    kind: dict[str, str] = {}
-    names = _git(root, "diff", "--relative", "--name-status", "--no-renames", "-z", base).split("\0")
-    for i in range(0, len(names) - 1, 2):
-        kind[names[i + 1]] = {"A": "added", "D": "deleted"}.get(names[i][:1], "modified")
-    out: dict[str, tuple[int, int, str]] = {}
-    for record in _git(root, "diff", "--relative", "--numstat", "--no-renames", "-z", base).split("\0"):
-        added, _, rest = record.partition("\t")
-        deleted, _, path = rest.partition("\t")
-        if path:
-            moved = (int(added), int(deleted)) if added.isdigit() and deleted.isdigit() else (0, 0)
-            out[path] = (*moved, kind.get(path, "modified"))
-    for path in _git(root, "ls-files", "--others", "--exclude-standard", "-z").split("\0"):
-        if path and path not in out:
-            text = inventory.read_text(root / path)
-            out[path] = (len(text.splitlines()) if text else 0, 0, "added")
-    return out
+def changed_files(root: Path, base: str) -> dict[str, gitlog.FileChange]:
+    """Path -> what changed between `base` and the working tree, untracked files included. A file git sees as moved is
+    one entry under its new name, its `origin` the path it had at the base and its lines the edits made on the way."""
+    found = gitlog.diff(root, base)
+    if found is None:
+        raise CheckError("git could not read what changed since the base")
+    return found
+
+
+def _renamed(a: Analysis, moves: dict[str, str]) -> Analysis:
+    """`a` with every path in `moves` spelled as the working tree spells it now, so that the base of a change and the
+    change itself name a moved file the same way. Records and the graph are translated; the base side carries no
+    history, so nothing else needs to be."""
+    if not moves:
+        return a
+
+    def new(path: str | None) -> str | None:
+        return moves.get(path, path) if path is not None else None
+
+    g = a.graph
+    graph = dataclasses.replace(
+        g,
+        analyzed={new(p) for p in g.analyzed},
+        edges={new(s): {new(t) for t in ts} for s, ts in g.edges.items()},
+        indirect={new(s): {new(t) for t in ts} for s, ts in g.indirect.items()},
+        roots={new(p): r for p, r in g.roots.items()},
+        tests={new(p) for p in g.tests},
+        config_refs=defaultdict(set, {new(p): {new(c) for c in cs} for p, cs in g.config_refs.items()}),
+        doc_refs=defaultdict(set, {new(p): {new(c) for c in cs} for p, cs in g.doc_refs.items()}),
+        inbound=defaultdict(set, {new(p): {new(x) for x in xs} for p, xs in g.inbound.items()}),
+        provenance={new(s): {new(t): k for t, k in ts.items()} for s, ts in g.provenance.items()},
+        prod_parent={new(p): new(q) for p, q in g.prod_parent.items()},
+        test_parent={new(p): new(q) for p, q in g.test_parent.items()},
+    )
+    records = {new(p): dataclasses.replace(r, path=new(p)) for p, r in a.records.items()}
+    return dataclasses.replace(a, records=records, graph=graph)
 
 
 def extract_tree(root: Path, base: str, prefix: str, dest: Path, skip: list[str]) -> int:
@@ -147,10 +165,12 @@ def _describe(e: dict) -> str:
     return f"`{e['from']}` → `{e['to']}`, {e['imports']} import{'s' if e['imports'] != 1 else ''}{sample}"
 
 
-def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, tuple[int, int, str]]) -> dict:
-    """The structural difference between two analyses of one repository, and the findings it adds up to."""
+def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, gitlog.FileChange]) -> dict:
+    """The structural difference between two analyses of one repository, and the findings it adds up to. The base is
+    read under the names the working tree uses now, so a moved file is one file on both sides."""
     findings: list[dict] = []
     touched = set(changed)
+    base_a = _renamed(base_a, {c.origin: p for p, c in changed.items() if c.origin})
 
     # orphans: files nothing reaches
     base_orphans = {p for p, r in base_a.records.items() if r.status == "ORPHAN"}
@@ -189,22 +209,30 @@ def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, tuple[int, in
             )
         )
 
-    # imports of deleted files
+    # imports of deleted files, and of moved files under their old name
     dangling = []
-    for path, (_, _, state) in sorted(changed.items()):
+    for path, change in sorted(changed.items()):
         rec = base_a.records.get(path)
-        if state != "deleted" or rec is None or not rec.analyzer:
+        if change.state not in ("deleted", "moved") or rec is None or not rec.analyzer:
             continue
         users = sorted(
-            s for s in base_a.graph.inbound.get(path, ()) if path in modules._imported(base_a, s) and s in head_a.records and s not in touched
+            s
+            for s in base_a.graph.inbound.get(path, ())
+            if path in modules._imported(base_a, s) and s in head_a.records and s not in touched and path not in modules._imported(head_a, s)
         )
         if users:
-            dangling.append({"deleted": path, "importers": users})
+            gone = change.origin or path
+            row = {"deleted": gone, "importers": users}
+            if change.origin:
+                row["moved_to"] = path
+            dangling.append(row)
             findings.append(
                 _finding(
-                    "dangling-import", "block", path, f"`{path}` was deleted but is still imported",
+                    "dangling-import", "block", gone,
+                    f"`{gone}` was moved to `{path}` but is still imported under its old name" if change.origin else f"`{path}` was deleted but is still imported",
                     "Untouched by this change, still importing it: " + ", ".join(f"`{u}`" for u in users[:LISTED]) + (f" and {len(users) - LISTED} more" if len(users) > LISTED else ""),
-                    users[:LISTED], "Restore the file, or update every importer in the same change.",
+                    users[:LISTED],
+                    "Update every importer to the new path in the same change." if change.origin else "Restore the file, or update every importer in the same change.",
                 )
             )
 
@@ -260,11 +288,11 @@ def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, tuple[int, in
 
     # changed code that nobody active maintains
     unowned = []
-    for path, (added_lines, deleted_lines, state) in sorted(changed.items()):
+    for path, change in sorted(changed.items()):
         rec = head_a.records.get(path)
-        if state == "deleted" or rec is None or rec.kind != "code" or rec.ownership != UNOWNED:
+        if change.state == "deleted" or rec is None or rec.kind != "code" or rec.ownership != UNOWNED:
             continue
-        unowned.append({"path": path, "lines": added_lines + deleted_lines, "last_owner": rec.owner, "owner_idle_days": rec.owner_idle_days})
+        unowned.append({"path": path, "lines": change.lines, "last_owner": rec.owner, "owner_idle_days": rec.owner_idle_days})
     unowned.sort(key=lambda r: (-r["lines"], r["path"]))
     if unowned:
         gone = head_a.cfg.owner_inactive_days
@@ -304,14 +332,15 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
     now = time.time() if now is None else now
     base, head, prefix = resolve_base(root, since)
     skip = [*inventory.DEFAULT_EXCLUDES, *cfg.exclude]
-    raw = changed_files(root, base)
+    changed = {p: c for p, c in sorted(changed_files(root, base).items()) if not inventory.matches(p, skip)}
     dirty = bool(_git(root, "status", "--porcelain", "--untracked-files=normal").strip())
     files = []
-    for path, (added, deleted, state) in sorted(raw.items()):
-        if inventory.matches(path, skip):
-            continue
+    for path, c in changed.items():
         lang = inventory.language_of(path)
-        files.append({"path": path, "change": state, "added": added, "deleted": deleted, "lines": added + deleted, "code": bool(lang is not None and lang.kind == "code")})
+        row = {"path": path, "change": c.state, "added": c.added, "deleted": c.deleted, "lines": c.lines, "code": bool(lang is not None and lang.kind == "code")}
+        if c.origin:
+            row["from"] = c.origin
+        files.append(row)
     code = [f for f in files if f["code"]]
     change_ids = {"since": since, "base": base, "head": head, "uncommitted": dirty}
     result: dict = {
@@ -328,6 +357,7 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
             "code_files": len(code),
             "added": sum(f["change"] == "added" for f in code),
             "modified": sum(f["change"] == "modified" for f in code),
+            "moved": sum(f["change"] == "moved" for f in code),
             "deleted": sum(f["change"] == "deleted" for f in code),
             "lines": sum(f["lines"] for f in code),
             "other_files": len(files) - len(code),
@@ -345,7 +375,7 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
         base_a = analyze(Path(scratch), quiet, now=now)
     head_a = analyze(root, quiet, now=now, rev=base)
     result["meta"] = meta.of(head_a, change=change_ids, analysis={"structure": "complete", "reason": None})
-    result.update(compare(base_a, head_a, {f["path"]: (f["added"], f["deleted"], f["change"]) for f in files}))
+    result.update(compare(base_a, head_a, changed))
     result["summary"]["findings"] = {s: sum(f["severity"] == s for f in result["findings"]) for s in SEVERITIES}
     result["summary"]["modules"] = len(result["modules_touched"])
     return result

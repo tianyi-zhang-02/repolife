@@ -14,9 +14,10 @@ def markdown(result: dict, limit: int = 20) -> str:
     c, s = result["change"], result["summary"]
     target = "the working tree" if c["uncommitted"] else c["head"]
     out = [f"# Change check: {result['repo']['name']}", ""]
+    kinds = [f"{s['added']} added", f"{s['modified']} modified", *([f"{s['moved']} moved"] if s.get("moved") else []), f"{s['deleted']} deleted"]
     out += [
         f"`{c['since']}` ({c['base']}) to {target}: {_many(s['files'], 'file')} changed, {s['code_files']} of them code "
-        f"({s['added']} added, {s['modified']} modified, {s['deleted']} deleted), **{s['lines']:,}** lines.",
+        f"({', '.join(kinds)}), **{s['lines']:,}** lines.",
         "",
     ]
     if not s["code_files"]:
@@ -56,7 +57,7 @@ def markdown(result: dict, limit: int = 20) -> str:
     code = [f for f in result["changed_files"] if f["code"]]
     code.sort(key=lambda f: (-f["lines"], f["path"]))
     out += ["Changed code, largest first:", ""]
-    out += _table(["File", "Change", "Lines"], [[f"`{f['path']}`", f["change"], f"+{f['added']} -{f['deleted']}"] for f in code[:limit]])
+    out += _table(["File", "Change", "Lines"], [[f"`{f['path']}`", f"moved from `{f['from']}`" if f["change"] == "moved" and f.get("from") else f["change"], f"+{f['added']} -{f['deleted']}"] for f in code[:limit]])
     if len(code) > limit:
         out += [f"{len(code) - limit} more files in the JSON output.", ""]
     return "\n".join(out + _notes(result))

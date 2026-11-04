@@ -71,6 +71,10 @@ artifacts, test selection and gates are in [docs/workflow-recipes.md](../workflo
 
 Only what static imports show is compared, so a clean result is not proof that nothing else depends on the change, and
 a `block` is certain only for importers the change left untouched. Both sides are cut into modules the same way, so a
-file added or removed cannot move a boundary and create a dependency that is not there. Renames are not followed: a
-moved file is a deletion and an addition. Files the analysis does not read (symlinks, submodules, anything above the
-size limit, anything excluded) are not part of either side.
+file added or removed cannot move a boundary and create a dependency that is not there. A file git sees as moved (its
+default similarity threshold) is one file under its new name on both sides: the summary counts it under `moved`, its
+row carries the old path as `from`, its lines are the edits made on the way, and a renamed package keeps its cycles,
+dependencies and orphans instead of reporting them gone and new again. A moved file that an untouched file still
+imports under its old name is a `dangling-import`, with `moved_to` beside the old path. A move git does not recognise,
+or one not yet added to the index, is still a deletion and an addition. Files the analysis does not read (symlinks,
+submodules, anything above the size limit, anything excluded) are not part of either side.

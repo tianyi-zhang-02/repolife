@@ -59,7 +59,8 @@ trouble that already happened and what a mistake could reach; ownership describe
 in this repository yet, and the same check on other repositories has not been done.
 
 History is read up to the base of the change, so the change's own commits count neither as activity nor as making its
-author an owner, and a file the change adds has no history and sorts by its size. *Who can look* lists the people
+author an owner. A file the change adds has no history and sorts by its size; a file it moves keeps the history of its
+old name (`from` names it, the flag reads `moved`) and its lines are the edits made on the way. *Who can look* lists the people
 who maintain the changed files, excluding the authors (the commits of the change, or whoever `git config user.name` is
 when the work is uncommitted); git cannot see who reviewed. Dependents are static imports only: importing `a.b.c`
 does not make a file depend on the package `a`, and dynamic loading and consumers outside the repository are invisible.

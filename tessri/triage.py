@@ -60,25 +60,13 @@ def resolve_base(root: Path, since: str) -> tuple[str, str]:
     return base, head
 
 
-def _diff(root: Path, base: str) -> dict[str, tuple[int, int, str]]:
-    """path -> (added, deleted, "modified" | "added" | "deleted") between `base` and the working tree, untracked files included."""
-    out: dict[str, tuple[int, int, str]] = {}
-    names = _git(root, "diff", "--relative", "--name-status", "--no-renames", "-z", base).split("\0")
-    kind = {}
-    for i in range(0, len(names) - 1, 2):
-        kind[names[i + 1]] = {"A": "added", "D": "deleted"}.get(names[i][:1], "modified")
-    numstat = _git(root, "diff", "--relative", "--numstat", "--no-renames", "-z", base).split("\0")
-    for record in numstat:
-        added, _, rest = record.partition("\t")
-        deleted, _, path = rest.partition("\t")
-        if path:
-            moved = (int(added), int(deleted)) if added.isdigit() and deleted.isdigit() else (0, 0)
-            out[path] = (*moved, kind.get(path, "modified"))
-    for path in _git(root, "ls-files", "--others", "--exclude-standard", "-z").split("\0"):
-        if path and path not in out:
-            text = inventory.read_text(root / path)
-            out[path] = (len(text.splitlines()) if text else 0, 0, "added")
-    return out
+def _diff(root: Path, base: str) -> dict[str, gitlog.FileChange]:
+    """Path -> what changed between `base` and the working tree, untracked files included; a file git sees as moved is
+    one entry under its new name, with the lines edited on the way."""
+    found = gitlog.diff(root, base)
+    if found is None:
+        raise TriageError("git could not read what changed since the base")
+    return found
 
 
 def _authors(root: Path, base: str, dirty: bool) -> dict[str, str]:
@@ -138,17 +126,17 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
     authors = _authors(root, base, dirty)
     skip = [*inventory.DEFAULT_EXCLUDES, *cfg.exclude]
 
-    code: dict[str, tuple[int, int, str]] = {}
+    code: dict[str, gitlog.FileChange] = {}
     other_files = other_lines = 0
-    for path, (added, deleted, state) in diff.items():
+    for path, change in diff.items():
         if inventory.matches(path, skip):
             continue
         lang = inventory.language_of(path)
         if lang is not None and lang.kind == "code":
-            code[path] = (added, deleted, state)
+            code[path] = change
         else:
             other_files += 1
-            other_lines += added + deleted
+            other_lines += change.lines
 
     def is_test(path: str) -> bool:
         return a.records[path].is_test if path in a.records else path in g.tests
@@ -160,7 +148,8 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
     ripple: dict[str, int] = {}
     tests: dict[str, int] = {}
     rows = []
-    for path, (added, deleted, state) in code.items():
+    for path, change in code.items():
+        added, deleted, state = change.added, change.deleted, change.state
         rec = a.records.get(path)
         act = a.activity.files.get(path)
         fixes = act.fixes_90 if act else 0
@@ -187,6 +176,8 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
             flags.append("new file")
         if state == "deleted":
             flags.append("deleted")
+        if state == "moved":
+            flags.append("moved")
         if found is not None and found.state == UNOWNED:
             flags.append("no active owner")
         if authors and holders and not (holders & set(authors)):
@@ -217,6 +208,8 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
             "dependents": {"direct": direct, "within_2": direct + deeper},
             "flags": flags,
         }
+        if change.origin:
+            row["from"] = change.origin
         rows.append(row)
     rows.sort(key=lambda r: (-r["commits_active"], -r["lines"], r["path"]))
     for rank, row in enumerate(rows, 1):
@@ -257,7 +250,8 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
         "Fix and revert history is shown but does not reorder: it added nothing beyond activity.",
         "Dependents, tests and owners are context: they show what a mistake could reach and who is able to look, and they did not improve the prediction. "
         "Dependents are static imports; dynamic loading and consumers outside the repository are invisible.",
-        "History is read up to the base of the change, so its own commits do not count as trouble and its authors do not count as owners.",
+        "History is read up to the base of the change and under the name each file has now, so a moved file keeps its past, "
+        "the change's own commits do not count as trouble and its authors do not count as owners.",
     ]
     if not a.activity.files:
         notes.append("The repository has little history, so the ordering falls back to the size of the change.")
@@ -275,6 +269,7 @@ def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = No
             "recently_fixed": sum(1 for r in rows if r["fixes_90"]),
             "busy": sum(1 for r in rows if r["tier"] == "busy"),
             "new": sum(1 for r in rows if "new file" in r["flags"]),
+            "moved": sum(1 for r in rows if "moved" in r["flags"]),
             "no_active_owner": sum(1 for r in rows if "no active owner" in r["flags"]),
             "nobody_else_can_look": len(nobody_else),
             "other_files": other_files,
@@ -344,7 +339,8 @@ def markdown(t: dict, limit: int = 20, active_days: int = 90) -> str:
     rows = []
     for r in t["files"][:limit]:
         who = _owners(r["owners"], gone) if r["owners"] else "-"
-        rows.append([r["rank"], f"`{r['path']}`", _why(r, active_days), f"+{r['added']} -{r['deleted']}", who, r["dependents"]["direct"], "; ".join(r["flags"]) or "-"])
+        flags = [f"moved from `{r['from']}`" if f == "moved" and r.get("from") else f for f in r["flags"]]
+        rows.append([r["rank"], f"`{r['path']}`", _why(r, active_days), f"+{r['added']} -{r['deleted']}", who, r["dependents"]["direct"], "; ".join(flags) or "-"])
     out += ["Look at these first:", ""]
     out += _table(["#", "File", "Why", "This change", "Owners", "Imported by", "Flags"], rows, {0, 5})
     if len(t["files"]) > limit:
