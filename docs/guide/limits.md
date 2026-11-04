@@ -20,9 +20,9 @@ What the analysis cannot see, it says it cannot see. This is the list.
   their real call graph, and registries, dependency injection and dynamic loading leave no edge, so a missing
   dependency is not proof there is none.
 - A dotted name or path in a string is an edge of kind `string`, and `impact` follows it by default. A tool that
-  names files in strings links itself to them: Tessri's own Python analyzer holds the string `__main__.py`, so
-  on this repository `impact tessri/cli.py` reaches the analyzers from the CLI by default and `--edges imports`
-  does not. The bare `if __name__ == "__main__"` idiom makes no edge.
+  names files in strings links itself to them: a string `scripts/run.py` in a module is an edge to that file whether
+  or not the module runs it. A bare name that several files share is not resolved, and the bare `__init__.py` and
+  `__main__.py` (and the `if __name__ == "__main__"` idiom) make no edge.
 - Review load counts lines changed, not effort: a generated file that is not excluded, or a mechanical rename of one
   symbol, weighs as much as careful work. It cannot see who reviewed, and it does not see branches that never
   reached the history it reads.

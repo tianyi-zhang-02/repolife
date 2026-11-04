@@ -44,6 +44,12 @@ Also in this version:
   rename had made every file look one commit old). A pure move is activity but credits nobody with maintenance.
   A file rewritten beyond git's similarity threshold when moved starts over; a path re-created after a move is a new file. `triage` and `check` still treat a move as a deletion
   and an addition.
+- A file name that several files share names none of them. A bare `utils.py` in a config, a script or a string used
+  to resolve to every `utils.py` in the repository (on one 2,000-file repository, fourteen such names fanned out to
+  701 files, `__init__.py` alone to 432), making them all reachable and giving each a `string` edge; now such a name
+  resolves to nothing, the scan's caveats list the names configs and scripts used with how many files each fits, and
+  an `entry` in the configuration still means every file it fits. The bare `__init__.py` and `__main__.py` never
+  name a file. Verdicts on that repository did not change; a third of its `string` edges were this.
 
 ## 0.1.0
 

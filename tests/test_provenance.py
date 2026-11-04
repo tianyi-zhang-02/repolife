@@ -191,15 +191,21 @@ class TypeScriptProvenanceTest(TempRepo):
 
 
 class PathStringTest(TempRepo):
-    def test_a_bare_dunder_file_name_in_a_string_is_a_string_edge(self):
-        write_tree(self.root, {"pkg/__init__.py": "", "pkg/__main__.py": "print(1)\n", "pkg/names.py": 'SPECIAL = {"__main__.py", "setup.py"}\n', "pkg/guard.py": 'if __name__ == "__main__":\n    pass\n'})
+    def test_a_path_string_is_a_string_edge_but_a_bare_package_name_is_not(self):
+        write_tree(self.root, {
+            "pkg/__init__.py": "", "pkg/__main__.py": "print(1)\n",
+            "pkg/names.py": 'SPECIAL = {"__main__.py", "setup.py"}\n',  # the name every package has: no file in particular
+            "pkg/runner.py": 'ENTRY = "pkg/__main__.py"\n',  # a path: this file
+            "pkg/guard.py": 'if __name__ == "__main__":\n    pass\n',
+        })
         a = scan(self.root)
-        self.assertEqual(a.graph.kind("pkg/names.py", "pkg/__main__.py"), "string")
+        self.assertNotIn("pkg/__main__.py", a.graph.edges.get("pkg/names.py", set()))
         self.assertNotIn("pkg/__main__.py", a.graph.edges.get("pkg/guard.py", set()))  # the idiom alone makes no edge
+        self.assertEqual(a.graph.kind("pkg/runner.py", "pkg/__main__.py"), "string")
         every = modules.impact(a, "pkg/__main__.py")
         narrow = modules.impact(a, "pkg/__main__.py", edges="imports")
         self.assertEqual((every["dependents"]["files"], narrow["dependents"]["files"]), (1, 0))
-        self.assertEqual(narrow["edges"]["references"]["listed"], [{"from": "pkg/names.py", "to": "pkg/__main__.py", "kind": "string"}])
+        self.assertEqual(narrow["edges"]["references"]["listed"], [{"from": "pkg/runner.py", "to": "pkg/__main__.py", "kind": "string"}])
 
 
 class DynamicLoadingTest(TempRepo):
