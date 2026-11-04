@@ -39,6 +39,11 @@ Also in this version:
   both policies. Nothing is invented and nothing is dropped; `--fail-on` counts findings, not displayed results.
 - A GitHub Actions workflow runs the test suite on Python 3.11 and 3.12 for every push to `main` and every pull
   request.
+- Git history follows the renames git detects: activity, authors, fix counts, ownership credit and the review
+  windows are read under a file's current name, so a move no longer restarts its history (this repository's own
+  rename had made every file look one commit old). A pure move is activity but credits nobody with maintenance.
+  A file rewritten beyond git's similarity threshold when moved starts over; a path re-created after a move is a new file. `triage` and `check` still treat a move as a deletion
+  and an addition.
 
 ## 0.1.0
 

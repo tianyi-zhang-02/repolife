@@ -1,4 +1,5 @@
-"""Per-file git activity and per-author credit from a single `git log` pass."""
+"""Per-file git activity and per-author credit from a single `git log` pass. The renames git detects are followed, so
+a file keeps its history across a move; a file rewritten beyond git's similarity threshold when moved starts over."""
 
 from __future__ import annotations
 
@@ -151,15 +152,37 @@ def is_ignored(name: str, email: str, patterns: Sequence[str]) -> bool:
     return any(fnmatch.fnmatchcase(v.lower(), p.lower()) for p in patterns for v in (name, email))
 
 
-def _commits(lines) -> Iterator[tuple[int, str, str, str, list[str]]]:
-    """(epoch, author name, author email, subject, files) for each commit in a `git log --name-only` stream."""
+class _Names:
+    """The name a file has at the revision read, for every name it had earlier. History is read newest first, so when
+    a commit that renamed `old` to `new` goes by, every older mention of `old` belongs to the file now called whatever
+    `new` became, and every older mention of `new` is another file, one that was deleted before the rename: its name
+    is marked dead (None) so that its history is never merged into the live file. An `old` re-created after the
+    rename is a new file too, because its commits were seen before the rename went by."""
+
+    def __init__(self) -> None:
+        self.current: dict[str, str | None] = {}
+
+    def renamed(self, old: str, new: str) -> str | None:
+        """The current name of the file a commit renamed `old` to `new`; None when that file is dead."""
+        now = self.current.pop(new, new)
+        self.current[old] = now
+        self.current[new] = None
+        return now
+
+    def of(self, path: str) -> str | None:
+        return self.current.get(path, path)
+
+
+def _commits(lines) -> Iterator[tuple[int, str, str, str, list[tuple[str, ...]]]]:
+    """(epoch, author name, author email, subject, entries) for each commit in a `git log --name-status` stream; an
+    entry is (status, path), or (status, old, new) for a rename or copy."""
     head: tuple[int, str, str, str] | None = None
-    files: list[str] = []
+    entries: list[tuple[str, ...]] = []
     for line in lines:
         line = line.rstrip("\n")
         if line.startswith("\x1e"):
             if head:
-                yield (*head, files)
+                yield (*head, entries)
             stamp, _, rest = line[1:].partition("\t")
             name, _, rest = rest.partition("\t")
             email, _, subject = rest.partition("\t")
@@ -167,11 +190,32 @@ def _commits(lines) -> Iterator[tuple[int, str, str, str, list[str]]]:
                 head = (int(stamp), name, email, subject)
             except ValueError:
                 head = (0, name, email, subject)
-            files = []
+            entries = []
         elif line:
-            files.append(line)
+            parts = line.split("\t")
+            if parts[0][:1] in ("R", "C") and len(parts) >= 3:
+                entries.append((parts[0], parts[1], parts[2]))
+            elif len(parts) >= 2:
+                entries.append((parts[0], parts[1]))
     if head:
-        yield (*head, files)
+        yield (*head, entries)
+
+
+def _touched(entries: list[tuple[str, ...]], names: _Names) -> list[tuple[str, bool]]:
+    """(current name, content changed) for each file a commit touched that still exists at the revision read, each
+    once. A rename counts as touching the file it moved, but a pure move (`R100`) changes no content, so it is
+    activity and not maintenance credit; a copy touches the copy only, and the source keeps its own history."""
+    seen: dict[str, bool] = {}
+    for entry in entries:
+        if len(entry) == 3:
+            status, old, new = entry
+            name = names.renamed(old, new) if status.startswith("R") else names.of(new)
+            changed = status != "R100"
+        else:
+            name, changed = names.of(entry[1]), True
+        if name is not None:
+            seen[name] = seen.get(name, False) or changed
+    return list(seen.items())
 
 
 def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str] = (), rev: str = "HEAD") -> Activity | None:
@@ -179,13 +223,15 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
     the base of a change gives the picture before it, in which its own author owns nothing yet.
 
     Paths are relative to `root` (`--relative`), so a sub-directory of a larger
-    repository is analysed on its own history. Merge commits list no files and
-    renames are not followed, which keeps counts deterministic. Names and emails
-    go through `.mailmap`, so one person with several addresses can be merged.
+    repository is analysed on its own history. Merge commits list no files. The
+    renames git detects (`-M`, its default similarity) are followed, so a moved
+    file keeps its history under its current name; a move across the `--relative`
+    boundary is an addition. Names and emails go through `.mailmap`, so one
+    person with several addresses can be merged.
     """
     cmd = [
         "git", "-c", "core.quotepath=false", "-C", str(root), "log",
-        "--relative", "--no-renames", "--name-only", "--format=%x1e%at%x09%aN%x09%aE%x09%s", rev, "--",
+        "--relative", "-M", "--name-status", "--format=%x1e%at%x09%aN%x09%aE%x09%s", rev, "--",
     ]  # fmt: skip
     try:
         proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True, encoding="utf-8", errors="replace")
@@ -200,10 +246,12 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
     credit: dict[str, dict[str, float]] = {}
     bulk: dict[str, dict[str, float]] = {}  # credit from bulk commits, used only for files nothing else touched
     commits = 0
+    names = _Names()
     assert proc.stdout is not None
     with proc:  # closes the pipe and reaps the process
-        for when, who, email, subject, files in _commits(proc.stdout):
+        for when, who, email, subject, entries in _commits(proc.stdout):
             commits += 1
+            files = _touched(entries, names)
             repair = bool(FIX_SUBJECT.match(subject))
             person = None if is_ignored(who, email, ignore_authors) else identity(who, email)
             weight = 0.5 ** (max(0.0, now - when) / (HALF_LIFE_DAYS * 86400))
@@ -215,7 +263,7 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
                     known.emails.add(email.lower())
                     known.last = max(known.last, when)
             target = bulk if len(files) >= BULK_FILES else credit
-            for path in files:
+            for path, changed in files:
                 entry = stats.get(path)
                 if entry is None:
                     entry = stats[path] = [when, when, 0, 0, set(), 0, 0]
@@ -230,7 +278,7 @@ def load(root: Path, now: float, active_days: int, ignore_authors: Sequence[str]
                         entry[6] += 1
                         if when >= fix_cut:
                             entry[5] += 1
-                if person:
+                if person and changed:
                     slot = target.setdefault(path, {})
                     slot[person] = slot.get(person, 0.0) + weight
     if proc.returncode != 0 or commits == 0:
@@ -264,7 +312,8 @@ def changes(root: Path, now: float, days: int, ignore_authors: Sequence[str] = (
     window with the one before it. The window is cut by author date, like ownership: `git log --since` would
     stop at the first old-dated commit it meets and silently drop newer ones behind it, so the commits are listed
     first and the diffs are read only for the ones inside. Merge commits are left out (they carry no diff of
-    their own) and renames are not followed. None when `root` has no usable git history."""
+    their own); the renames git detects are followed, so a moved file's lines are counted under its current name.
+    None when `root` has no usable git history."""
     cut = now - 2 * days * 86400
     listing = _git_text(root, "log", "--no-merges", "--format=%H%x09%at")
     if listing is None:
@@ -273,23 +322,36 @@ def changes(root: Path, now: float, days: int, ignore_authors: Sequence[str] = (
     if not inside:
         return []
     body = _git_text(
-        root, "log", "--no-walk=unsorted", "--stdin", "--relative", "--no-renames", "--numstat", "--format=%x1e%h%x09%at%x09%aN%x09%aE%x09%s",
+        root, "log", "-z", "--no-walk=unsorted", "--stdin", "--relative", "-M", "--numstat", "--format=%x1e%h%x09%at%x09%aN%x09%aE%x09%s",
         stdin="\n".join(inside) + "\n",
     )  # fmt: skip
     if body is None:
         return None
+    # With -z every record ends in NUL and no path is quoted: a rename is a numstat entry with an empty path followed
+    # by the old and the new name as records of their own. The first entry after a header carries the blank line git
+    # prints between a commit's message and its diff.
     found: list[Change] = []
     current: Change | None = None
-    for line in body.split("\n"):  # not splitlines(): that would also break at the record separator
-        if line.startswith("\x1e"):
-            sha, stamp, name, email, subject = (line[1:].split("\t", 4) + [""] * 5)[:5]
+    names = _Names()
+    records = body.split("\0")
+    i = 0
+    while i < len(records):
+        record = records[i].lstrip("\n")
+        i += 1
+        if record.startswith("\x1e"):
+            sha, stamp, name, email, subject = (record[1:].split("\t", 4) + [""] * 5)[:5]
             person = None if is_ignored(name, email, ignore_authors) else identity(name, email)
             current = Change(sha, int(stamp) if stamp.isdigit() else 0, person, name, subject)
             found.append(current)
-        elif line and current is not None:
-            added, _, rest = line.partition("\t")
+        elif record and current is not None:
+            added, _, rest = record.partition("\t")
             deleted, _, path = rest.partition("\t")
+            moved = int(added) + int(deleted) if added.isdigit() and deleted.isdigit() else 0
+            if not path and i + 1 < len(records):  # a dead file's lines were still work: they count under its last name
+                path = names.renamed(records[i], records[i + 1]) or records[i + 1]
+                i += 2
+            else:
+                path = names.of(path) or path
             if path:
-                moved = int(added) + int(deleted) if added.isdigit() and deleted.isdigit() else 0
                 current.files[path] = current.files.get(path, 0) + moved
     return found
