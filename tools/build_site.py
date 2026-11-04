@@ -265,8 +265,8 @@ def top(depth: int, current: str | None) -> str:
     up = "../" * depth
     guide = ' aria-current="page"' if current == "guide" else ""
     return (
-        f'<header class="wrap top">\n  <a class="wordmark" href="{up or "./"}" aria-label="Tessri home">{MARK}<span>tessri<span class="dot">.</span></span></a>\n'
-        f'  <nav aria-label="Site"><a href="{up}guide/"{guide}>Guide</a><a href="{REPO}">GitHub</a>{THEME_BUTTON}</nav>\n</header>\n'
+        f'<div class="sky">\n<header class="wrap top">\n  <a class="wordmark" href="{up or "./"}" aria-label="Tessri home">{MARK}<span>tessri<span class="dot">.</span></span></a>\n'
+        f'  <nav aria-label="Site"><a href="{up}guide/"{guide}>Guide</a><a href="{REPO}">GitHub</a>{THEME_BUTTON}</nav>\n</header>\n</div>\n'
     )
 
 

@@ -14,6 +14,7 @@
 </head>
 <body>
 
+<div class="sky">
 <header class="wrap top">
   <a class="wordmark" href="./" aria-label="Tessri home">
     {{mark}}
@@ -25,14 +26,11 @@
     {{theme_button}}
   </nav>
 </header>
-
-<main class="wrap">
-
-  <section class="hero">
+<section class="wrap hero">
     <h1>Keep code understandable.</h1>
     <p class="lede">Tessri reads a codebase and its git history, offline and with nothing else installed, and answers the questions a maintainer asks of a system that grows faster than anyone can read it.</p>
     <div class="actions">
-      <a class="button" href="guide/getting-started.html">Get started</a>
+      <a class="button cta" href="guide/getting-started.html">Get started</a>
       <a class="button quiet" href="guide/">Read the guide</a>
     </div>
     <div class="install">
@@ -40,7 +38,10 @@
       <button class="copy" type="button" data-copy="pip install git+{{repo}}">Copy</button>
     </div>
     <p class="note">Python 3.11 or newer, no dependencies. To run it once without installing: <code>uvx --from git+{{repo}} tessri scan .</code></p>
-  </section>
+</section>
+</div>
+
+<main class="wrap">
 
   <section class="band" id="questions">
     <span class="label">What it answers</span>
