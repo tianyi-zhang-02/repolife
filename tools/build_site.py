@@ -58,12 +58,14 @@ THEME_BUTTON = (
 SCRIPTS = """<script>
 (function () {
   var root = document.documentElement;
+  var motion = matchMedia("(prefers-reduced-motion: no-preference)").matches;
   var button = document.querySelector(".theme");
   if (button) {
     button.addEventListener("click", function () {
       var chosen = root.getAttribute("data-theme");
       var dark = chosen === "dark" || (!chosen && matchMedia("(prefers-color-scheme: dark)").matches);
       var next = dark ? "light" : "dark";
+      if (motion) { root.classList.add("switching"); setTimeout(function () { root.classList.remove("switching"); }, 300); }
       root.setAttribute("data-theme", next);
       try { localStorage.setItem("tessri-theme", next); } catch (e) {}
     });
@@ -78,6 +80,35 @@ SCRIPTS = """<script>
       });
     });
   });
+  if (!motion || !("IntersectionObserver" in window)) { return; }
+  var below = Array.prototype.filter.call(document.querySelectorAll("main .band"), function (s) { return s.getBoundingClientRect().top > innerHeight * 0.9; });
+  var arrive = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in"); arrive.unobserve(e.target); } });
+  }, { rootMargin: "0px 0px -10% 0px" });
+  below.forEach(function (s) { s.classList.add("reveal"); arrive.observe(s); });
+  var cmd = document.querySelector(".example .cmdline b");
+  var output = document.querySelector(".example .output");
+  if (cmd && output) {
+    var text = cmd.textContent;
+    var caret = document.createElement("span");
+    caret.className = "caret";
+    cmd.textContent = "";
+    cmd.parentNode.appendChild(caret);
+    output.classList.add("pending");
+    var seen = new IntersectionObserver(function (entries) {
+      if (!entries[0].isIntersecting) { return; }
+      seen.disconnect();
+      var i = 0;
+      var tick = setInterval(function () {
+        cmd.textContent = text.slice(0, ++i);
+        if (i >= text.length) {
+          clearInterval(tick);
+          setTimeout(function () { output.classList.remove("pending"); caret.remove(); }, 260);
+        }
+      }, 34);
+    }, { threshold: 0.3 });
+    seen.observe(cmd.parentNode);
+  }
 })();
 </script>"""
 
