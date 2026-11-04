@@ -6,3 +6,4 @@ dist/
 .venv/
 .tessri/
 *.pyz
+_site/

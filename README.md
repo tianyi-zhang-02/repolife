@@ -89,6 +89,13 @@ and lists every disagreement (needs `node`):
 python3 tools/diff_js_scanner.py path/to/node_modules --typescript path/to/node_modules/typescript --sample 5000
 ```
 
+The site is built from this README and `docs/guide/` by a script with no dependencies either; `site/` holds the
+landing page, the stylesheet and the icon, and `.github/workflows/site.yml` deploys it to GitHub Pages:
+
+```bash
+python3 tools/build_site.py --out _site && python3 -m http.server --directory _site
+```
+
 ## License
 
 MIT
