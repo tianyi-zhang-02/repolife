@@ -13,6 +13,8 @@ faster than anyone can read it. One page per question, each with real output and
 - [Check what a change did to the structure](check.md): findings, the exit code for CI, and SARIF.
 - [The HTML report](html-report.md): one offline page with the explorer.
 - [Integration: skills, AGENTS.md, CI](integration.md): the receipt-managed install, and the older `init`.
+- [MCP: Tessri as tools](mcp.md): `tessri mcp`, the seven tools, their arguments and errors, and the profiles that
+  point each agent at the server.
 - [Configuration](configuration.md): `.tessri.toml` and `[tool.tessri]`.
 - [JSON output](json.md): the objects, `schema_version` and the `meta` block.
 - [Architecture](architecture.md): the pipeline, one view per command, and how to add a language.

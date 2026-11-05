@@ -1,4 +1,4 @@
-"""Command line entry point: `tessri scan | why | graph | impact | triage | check | init`."""
+"""Command line entry point: `tessri scan | why | graph | impact | triage | check | init | integration | mcp`."""
 
 from __future__ import annotations
 
@@ -178,6 +178,12 @@ def _cmd_init(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_mcp(args: argparse.Namespace) -> int:
+    from .mcp import Server
+
+    return Server([_root(r) for r in (args.root or ["."])]).serve()
+
+
 def _cmd_integration(args: argparse.Namespace) -> int:
     root = Path(args.path).expanduser()
     if not root.is_dir():
@@ -267,7 +273,11 @@ def build_parser() -> argparse.ArgumentParser:
     init.add_argument("--dry-run", action="store_true", help="show what would change without writing")
     init.set_defaults(func=_cmd_init)
 
-    integ = sub.add_parser("integration", help="install, update, inspect or remove the project integration (agent skills, AGENTS.md block) with a receipt, reversibly")
+    mcp = sub.add_parser("mcp", help="serve the questions as Model Context Protocol tools over stdin/stdout, for an agent that starts it as a subprocess")
+    mcp.add_argument("--root", action="append", metavar="PATH", help="a checkout to serve (repeatable; default: the current directory); with several, every tool names one with `root`")
+    mcp.set_defaults(func=_cmd_mcp)
+
+    integ = sub.add_parser("integration", help="install, update, inspect or remove the project integration (agent skills, AGENTS.md block, MCP configuration) with a receipt, reversibly")
     ops = integ.add_subparsers(dest="op", required=True, metavar="{install,update,status,remove}")
     for op, text in (
         ("install", "write the skill or block for each --agent and record a receipt; an existing file is a conflict, never claimed"),
@@ -279,7 +289,7 @@ def build_parser() -> argparse.ArgumentParser:
         p.add_argument("path", nargs="?", default=".", help="project root (default: .)")
         p.add_argument("--format", choices=("text", "json"), default="text")
         if op != "status":
-            p.add_argument("--agent", action="append", choices=tuple(integration.PROFILES), metavar="{claude,codex,agents}", help="profile to act on, repeatable; install needs at least one, update and remove default to every recorded profile")
+            p.add_argument("--agent", action="append", choices=tuple(integration.PROFILES), metavar="{" + ",".join(integration.PROFILES) + "}", help="profile to act on, repeatable; install needs at least one, update and remove default to every recorded profile")
             p.add_argument("--dry-run", action="store_true", help="show the plan without writing anything")
         p.set_defaults(func=_cmd_integration)
     return parser

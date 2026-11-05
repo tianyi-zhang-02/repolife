@@ -533,3 +533,80 @@ class CliTextTest(Project):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ServerProfilesTest(Project):
+    """The `mcp` and `vscode` profiles add one entry to a JSON file hosts read; `copilot` is a file of its own."""
+
+    MCP = ".mcp.json"
+    VSCODE = ".vscode/mcp.json"
+    COPILOT = ".github/instructions/tessri.instructions.md"
+
+    def test_install_into_an_empty_project_creates_the_files(self):
+        doc = run(self.root, "install", ["mcp", "vscode", "copilot"])
+        self.assertEqual(self.actions(doc), {"mcp": "create", "vscode": "create", "copilot": "create"})
+        self.assertEqual(json.loads((self.root / self.MCP).read_text()), {"mcpServers": {"tessri": {"command": "tessri", "args": ["mcp"]}}})
+        self.assertEqual(json.loads((self.root / self.VSCODE).read_text()), {"servers": {"tessri": {"type": "stdio", "command": "tessri", "args": ["mcp"]}}})
+        copilot = (self.root / self.COPILOT).read_text()
+        self.assertTrue(copilot.startswith('---\napplyTo: "**"\n---\n\n# Tessri\n'))
+        self.assertIn("tessri_impact", copilot)
+        by = {t["profile"]: t for t in self.receipt()["targets"]}
+        self.assertEqual((by["mcp"]["kind"], by["mcp"]["created"], json.loads(by["mcp"]["span"])), ("key", True, {"command": "tessri", "args": ["mcp"]}))
+        self.assertEqual(by["vscode"]["dirs_created"], [".vscode"])
+        self.assertEqual(by["copilot"]["dirs_created"], [".github", ".github/instructions"])
+        self.assertEqual({r["profile"]: r["state"] for r in status(self.root)["targets"]}, {"mcp": "installed-current", "vscode": "installed-current", "copilot": "installed-current"})
+
+    def test_an_existing_configuration_gets_one_entry_and_keeps_the_rest(self):
+        write_tree(self.root, {self.MCP: '{"mcpServers": {"other": {"command": "x"}}}\n'})
+        doc = run(self.root, "install", ["mcp"])
+        self.assertEqual(self.actions(doc), {"mcp": "update"})
+        self.assertEqual(json.loads((self.root / self.MCP).read_text()), {"mcpServers": {"other": {"command": "x"}, "tessri": {"command": "tessri", "args": ["mcp"]}}})
+        self.assertFalse(self.receipt()["targets"][0]["created"])
+        run(self.root, "remove", None)
+        self.assertEqual(json.loads((self.root / self.MCP).read_text()), {"mcpServers": {"other": {"command": "x"}}})
+        self.assertFalse((self.root / RECEIPT).exists())
+
+    def test_a_created_file_that_held_only_our_entry_is_removed_with_its_directory(self):
+        run(self.root, "install", ["vscode"])
+        run(self.root, "remove", None)
+        self.assertFalse((self.root / ".vscode").exists())
+
+    def test_an_existing_entry_or_an_unreadable_file_is_a_conflict(self):
+        write_tree(self.root, {self.MCP: '{"mcpServers": {"tessri": {"command": "mine"}}}\n', self.VSCODE: '{\n  // comments are allowed here, but not JSON\n  "servers": {}\n}\n'})
+        doc = run(self.root, "install", ["mcp", "vscode"])
+        self.assertEqual(self.conflicts(doc), {"mcp": "markers", "vscode": "unmanaged"})
+        detail = next(c["detail"] for c in doc["conflicts"] if c["profile"] == "vscode")
+        self.assertIn('add the entry by hand: {"servers": {"tessri": {"type": "stdio", "command": "tessri", "args": ["mcp"]}}}', detail)
+        self.assertFalse((self.root / RECEIPT).exists())
+        self.assertEqual({r["profile"]: r["state"] for r in status(self.root)["targets"]}, {"mcp": "unmanaged"})  # a file without our entry is nobody's business
+
+    def test_an_edited_entry_is_yours(self):
+        run(self.root, "install", ["mcp"])
+        write_tree(self.root, {self.MCP: '{"mcpServers": {"tessri": {"command": "tessri", "args": ["mcp", "--root", "."]}}}\n'})
+        self.assertEqual({r["profile"]: r["state"] for r in status(self.root)["targets"]}, {"mcp": "user-modified"})
+        self.assertEqual(self.conflicts(run(self.root, "update", None)), {"mcp": "modified"})
+        self.assertEqual(self.conflicts(run(self.root, "remove", None)), {"mcp": "modified"})
+        self.assertTrue((self.root / RECEIPT).exists())
+
+    def test_update_is_a_no_op_when_current_and_recreates_a_missing_file(self):
+        run(self.root, "install", ["vscode"])
+        self.assertEqual(self.actions(run(self.root, "update", None)), {"vscode": "unchanged"})
+        (self.root / self.VSCODE).unlink()
+        self.assertEqual(self.actions(run(self.root, "update", None)), {"vscode": "create"})
+        self.assertEqual(json.loads((self.root / self.VSCODE).read_text())["servers"]["tessri"]["command"], "tessri")
+
+    def test_status_says_what_each_host_has_and_what_is_next(self):
+        hosts = {h["host"]: h for h in status(self.root)["hosts"]}
+        self.assertEqual(hosts["Claude Code"], {"host": "Claude Code", "instructions": None, "server": None, "next": "tessri integration install --agent claude; tessri integration install --agent mcp"})
+        run(self.root, "install", ["claude", "agents", "mcp"])
+        doc = status(self.root)
+        hosts = {h["host"]: h for h in doc["hosts"]}
+        self.assertEqual(hosts["Claude Code"], {"host": "Claude Code", "instructions": SKILL, "server": self.MCP, "next": None})
+        self.assertEqual((hosts["Codex"]["instructions"], hosts["Codex"]["server"]), ("AGENTS.md", None))
+        self.assertIn("run `codex mcp add tessri -- tessri mcp`", hosts["Codex"]["next"])
+        self.assertIn('"tools": ["*"]', hosts["Copilot coding agent"]["next"])
+        self.assertEqual(hosts["editors reading .vscode/mcp.json"]["next"], "tessri integration install --agent vscode")
+        from tessri.integration import text
+
+        self.assertIn(f"Claude Code: instructions {SKILL}; server .mcp.json\n", text(doc))
+        self.assertIn("Codex: instructions AGENTS.md; server none; next: run `codex mcp add tessri -- tessri mcp`", text(doc))

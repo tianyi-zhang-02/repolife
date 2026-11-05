@@ -2,8 +2,8 @@
 removed without touching anything the user wrote.
 
 The lifecycle keeps a receipt, `.tessri-integration.json`, at the project root: which profiles are installed,
-the hash of every file it wrote, the exact span it inserted into a shared `AGENTS.md`, whether it created each
-file and which directories it made. Only what the receipt records is ever updated or removed. A file that is
+the hash of every file it wrote, the exact span it inserted into a shared `AGENTS.md`, the entry it added to a
+shared MCP configuration file, whether it created each file and which directories it made. Only what the receipt records is ever updated or removed. A file that is
 already there, even one byte-identical to the template, is a conflict and is left alone; so is a recorded file
 the user has edited. Every mutation is planned and checked in full before the first write, a dry run writes
 nothing, single files are replaced atomically and an ordinary failure is rolled back. This is not a cross-file
@@ -45,12 +45,23 @@ _HEX = re.compile(r"^[0-9a-f]{64}$")
 class Profile:
     name: str
     path: str  # project-relative posix path; the fixed allowlist of what the lifecycle may touch
-    kind: str  # "file": the whole file is ours | "span": one marked span inside a shared file
+    kind: str  # "file": the whole file is ours | "span": one marked span inside a shared file | "key": one entry in a shared JSON object
     note: str  # what the user has to do for a running host to see the change
     old_path: str | None = None  # where an older version installed this profile, when that differs; still recognised
+    body: str = "SKILL"  # the attribute of `templates` that is the file's text (file) or the entry's value (key)
+    key: tuple[str, str] | None = None  # kind key: the entry, as parent key and name (`mcpServers`, `tessri`)
+
+    def value(self) -> dict:
+        """Kind key: the entry's value, as the template has it."""
+        return getattr(templates, self.body)
 
     def content(self) -> bytes:
-        return (templates.SKILL if self.kind == "file" else templates.AGENTS_BLOCK).encode("utf-8")
+        """The bytes the receipt hashes: the file's text, the AGENTS.md block, or the entry's canonical JSON."""
+        if self.kind == "span":
+            return templates.AGENTS_BLOCK.encode("utf-8")
+        if self.kind == "key":
+            return _canon(self.value())
+        return getattr(templates, self.body).encode("utf-8")
 
     def paths(self) -> tuple[str, ...]:
         """Every path a receipt may record for this profile: the current one and, if different, the old one."""
@@ -61,7 +72,19 @@ PROFILES = {
     "claude": Profile("claude", ".claude/skills/tessri/SKILL.md", "file", "start a new Claude Code session in this project so it discovers the skill", legacy.SKILL_PATHS["claude"]),
     "codex": Profile("codex", ".agents/skills/tessri/SKILL.md", "file", "restart Codex in this project so it discovers the skill", legacy.SKILL_PATHS["codex"]),
     "agents": Profile("agents", "AGENTS.md", "span", "hosts that read AGENTS.md pick the block up on their next read"),
+    "copilot": Profile("copilot", ".github/instructions/tessri.instructions.md", "file", "Copilot reads the file on its next request in this repository", body="COPILOT_INSTRUCTIONS"),
+    "mcp": Profile("mcp", ".mcp.json", "key", "a host that reads .mcp.json starts the server on its next session, after asking you to approve the project's servers", body="MCP_SERVER", key=("mcpServers", "tessri")),
+    "vscode": Profile("vscode", ".vscode/mcp.json", "key", "an editor that reads .vscode/mcp.json starts the server on its next agent request", body="VSCODE_SERVER", key=("servers", "tessri")),
 }
+
+# Who reads what: the profiles that carry a host's instructions and the one that points it at the server, in the
+# order `status` tries them; a host with no project-side server configuration gets the line to run instead.
+HOSTS = (
+    ("Claude Code", ("claude", "agents"), "mcp", None),
+    ("Codex", ("codex", "agents"), None, f"run `{templates.CODEX_MCP_COMMAND}` (Codex keeps MCP servers in your own configuration)"),
+    ("Copilot coding agent", ("agents", "copilot"), None, "paste into the repository's settings, Copilot, Coding agent, MCP configuration: " + json.dumps(templates.COPILOT_AGENT_SERVERS) + "; put `pip install tessri` in copilot-setup-steps.yml"),
+    ("editors reading .vscode/mcp.json", ("agents", "copilot", "claude", "codex"), "vscode", None),
+)
 
 
 def _markers_of(span: bytes) -> tuple[bytes, bytes]:
@@ -78,6 +101,47 @@ class IntegrationError(Exception):
 
 def _sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
+
+
+# --- one entry in a shared JSON file -------------------------------------------------------------------------------
+
+
+def _canon(value: object) -> bytes:
+    return json.dumps(value, sort_keys=True).encode("utf-8")
+
+
+def _load_object(data: bytes) -> dict | None:
+    """The file as a JSON object, or None when it is not one (comments, a list, broken JSON)."""
+    try:
+        doc = json.loads(data.decode("utf-8"))
+    except (UnicodeDecodeError, ValueError):
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def _dump_object(obj: dict) -> bytes:
+    return (json.dumps(obj, indent=2) + "\n").encode("utf-8")
+
+
+def _entry(obj: dict | None, key: tuple[str, str]) -> object | None:
+    parent = obj.get(key[0]) if obj else None
+    return parent.get(key[1]) if isinstance(parent, dict) else None
+
+
+def _with_entry(obj: dict, key: tuple[str, str], value: object) -> dict:
+    out = dict(obj)
+    out[key[0]] = {**out.get(key[0], {}), key[1]: value}  # type: ignore[dict-item]
+    return out
+
+
+def _without_entry(obj: dict, key: tuple[str, str]) -> dict:
+    out = dict(obj)
+    parent = {k: v for k, v in out.get(key[0], {}).items() if k != key[1]}  # type: ignore[union-attr]
+    if parent:
+        out[key[0]] = parent
+    else:
+        out.pop(key[0], None)
+    return out
 
 
 def _read(path: Path) -> bytes | None:
@@ -125,7 +189,7 @@ class Target:
 
     def to_json(self) -> dict:
         out = {"profile": self.profile, "path": self.path, "kind": self.kind, "sha256": self.sha256, "created": self.created, "dirs_created": list(self.dirs_created)}
-        if self.kind == "span":
+        if self.kind in ("span", "key"):
             out["span"] = self.span
         return out
 
@@ -162,6 +226,11 @@ class Target:
                 raise IntegrationError(f"{name}: the recorded span for {path} does not hold one marker pair")
             if _sha(data) != sha:
                 raise IntegrationError(f"{name}: the recorded span for {path} does not match its hash")
+        elif prof.kind == "key":
+            if not isinstance(span, str) or _load_object(span.encode("utf-8")) is None:
+                raise IntegrationError(f"{name}: target {path} records no entry")
+            if _sha(_canon(json.loads(span))) != sha:
+                raise IntegrationError(f"{name}: the recorded entry for {path} does not match its hash")
         else:
             span = None
         return cls(profile, path, prof.kind, sha, created, list(dirs), span)
@@ -320,7 +389,54 @@ def _select(receipt: Receipt | None, profiles: list[str] | None, op: str) -> lis
     return [p for p in PROFILES if p in profiles and p not in missing]  # removing what is not recorded is a no-op
 
 
+def _key_target(prof: Profile, created: bool, dirs: list[str]) -> Target:
+    value = _canon(prof.value())
+    return Target(prof.name, prof.path, "key", _sha(value), created, dirs, value.decode("utf-8"))
+
+
+def _install_key(root: Path, prof: Profile, data: bytes | None) -> Step | Conflict:
+    """Add the entry to a JSON object file: the whole file when there is none, one entry when the file parses."""
+    assert prof.key is not None
+    if data is None:
+        dirs = _missing_dirs(root, prof.path)
+        return Step(prof.name, prof.path, "key", "create", _dump_object(_with_entry({}, prof.key, prof.value())), dirs=dirs, target=_key_target(prof, True, dirs))
+    obj = _load_object(data)
+    if obj is None or (prof.key[0] in obj and not isinstance(obj[prof.key[0]], dict)):
+        return Conflict(prof.name, prof.path, "unmanaged", f"the file is not a JSON object Tessri can add to (comments, or `{prof.key[0]}` is not an object); add the entry by hand: {json.dumps(_with_entry({}, prof.key, prof.value()))}")
+    if _entry(obj, prof.key) is not None:
+        return Conflict(prof.name, prof.path, "markers", f"the file already has a `{prof.key[0]}.{prof.key[1]}` entry that no receipt installed; remove it by hand or leave the file unmanaged")
+    return Step(prof.name, prof.path, "key", "update", _dump_object(_with_entry(obj, prof.key, prof.value())), target=_key_target(prof, False, []))
+
+
+def _update_key(root: Path, prof: Profile, old: Target, data: bytes | None) -> list[Step] | Conflict:
+    assert prof.key is not None
+    if data is None:
+        dirs = sorted(set(old.dirs_created) | set(_missing_dirs(root, prof.path)), key=lambda d: d.count("/"))
+        return [Step(prof.name, prof.path, "key", "create", _dump_object(_with_entry({}, prof.key, prof.value())), dirs=_missing_dirs(root, prof.path), target=_key_target(prof, True, dirs))]
+    obj = _load_object(data)
+    current = _entry(obj, prof.key)
+    if current is None or _canon(current) != _canon(json.loads(old.span or "null")):
+        return Conflict(prof.name, prof.path, "modified", "the entry Tessri installed is no longer there as recorded (edited, removed, or the file no longer parses); it is not updated or removed")
+    if _canon(current) == _canon(prof.value()):
+        return [Step(prof.name, prof.path, "key", "unchanged", target=old)]
+    return [Step(prof.name, prof.path, "key", "update", _dump_object(_with_entry(obj or {}, prof.key, prof.value())), target=_key_target(prof, old.created, old.dirs_created))]
+
+
+def _remove_key(prof: Profile, old: Target, data: bytes) -> list[Step] | Conflict:
+    assert prof.key is not None
+    obj = _load_object(data)
+    current = _entry(obj, prof.key)
+    if current is None or _canon(current) != _canon(json.loads(old.span or "null")):
+        return Conflict(prof.name, old.path, "modified", f"the entry Tessri installed is no longer there as recorded; nothing in {old.path} is removed (the receipt keeps recording it)")
+    remaining = _without_entry(obj or {}, prof.key)
+    if old.created and not remaining:
+        return [Step(prof.name, old.path, "key", "remove", delete=True, dirs=list(old.dirs_created))]
+    return [Step(prof.name, old.path, "key", "remove", _dump_object(remaining))]
+
+
 def _install_step(root: Path, prof: Profile, data: bytes | None) -> Step | Conflict:
+    if prof.kind == "key":
+        return _install_key(root, prof, data)
     if prof.kind == "file":
         if data is not None:
             return Conflict(prof.name, prof.path, "unmanaged", "a file already exists here and no receipt records it; Tessri does not claim files it did not install (move it away, or keep using it unmanaged)")
@@ -355,6 +471,8 @@ def _move_step(root: Path, prof: Profile, old: Target, data: bytes | None, old_d
 
 
 def _update_step(root: Path, prof: Profile, old: Target, data: bytes | None, old_data: bytes | None) -> list[Step] | Conflict:
+    if prof.kind == "key":
+        return _update_key(root, prof, old, data)
     if prof.kind == "file":
         if old.path != prof.path:
             return _move_step(root, prof, old, data, old_data)
@@ -383,6 +501,8 @@ def _remove_step(prof: Profile, old: Target, data: bytes | None) -> list[Step] |
     """`data` is what the recorded path holds; for a target recorded under the old path that is the old file."""
     if data is None:
         return [Step(prof.name, old.path, prof.kind, "forget", dirs=list(old.dirs_created))]  # the dirs it made may still be empty
+    if prof.kind == "key":
+        return _remove_key(prof, old, data)
     if prof.kind == "file":
         if _sha(data) != old.sha256:
             return Conflict(prof.name, old.path, "modified", "the file differs from what Tessri installed; it is yours now, so it is not removed (the receipt keeps recording it)")
@@ -406,7 +526,7 @@ def plan(root: Path, op: str, profiles: list[str] | None) -> Plan:
     receipt = load_receipt(root)
     if op == "install":
         if not profiles:
-            raise IntegrationError("install needs at least one --agent (claude, codex or agents)")
+            raise IntegrationError(f"install needs at least one --agent ({', '.join(PROFILES)})")
         selected = [p for p in PROFILES if p in profiles]
     else:
         selected = _select(receipt, profiles, op)
@@ -658,7 +778,9 @@ def status(root: Path) -> dict:
                         rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "symlink", "recorded": False})
                     continue
                 data = _read(root / rel)
-                if data is not None and (prof.kind == "file" or any(b in data or e in data for b, e in _MARKERS)):
+                if data is None:
+                    continue
+                if prof.kind == "file" or (prof.kind == "span" and any(b in data or e in data for b, e in _MARKERS)) or (prof.kind == "key" and _entry(_load_object(data), prof.key) is not None):  # type: ignore[arg-type]
                     rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "unmanaged", "recorded": False})
             continue
         rel = recorded.path
@@ -670,6 +792,9 @@ def status(root: Path) -> dict:
             state = "missing"
         elif prof.kind == "file":
             state = "user-modified" if _sha(data) != recorded.sha256 else ("installed-current" if rel == prof.path and data == prof.content() else "installed-outdated")
+        elif prof.kind == "key":
+            current = _entry(_load_object(data), prof.key)  # type: ignore[arg-type]
+            state = "user-modified" if current is None or _sha(_canon(current)) != recorded.sha256 else ("installed-current" if _canon(current) == prof.content() else "installed-outdated")
         else:
             span = (recorded.span or "").encode("utf-8")
             state = "user-modified" if _span_state(data, span) != "ok" else ("installed-current" if _refreshed_span(span) == span else "installed-outdated")
@@ -686,8 +811,28 @@ def status(root: Path) -> dict:
         "receipt_path": receipt.path if receipt else None,
         "profiles": receipt.profiles() if receipt else [],
         "targets": rows,
+        "hosts": _hosts(rows),
         "attention": any(r["state"] != "installed-current" for r in rows),
     }
+
+
+def _hosts(rows: list[dict]) -> list[dict]:
+    """Per host: which installed file carries its instructions, which one points it at the MCP server, and what is
+    left to do. `None` means nothing installed for that part."""
+    installed = {r["profile"]: r["path"] for r in rows if r["recorded"] and r["state"] != "missing"}
+    out = []
+    for host, reads, server, by_hand in HOSTS:
+        instructions = next((installed[p] for p in reads if p in installed), None)
+        pointed = installed.get(server) if server else None
+        todo = []
+        if instructions is None:
+            todo.append(f"tessri integration install --agent {reads[0]}")
+        if server and pointed is None:
+            todo.append(f"tessri integration install --agent {server}")
+        if by_hand:
+            todo.append(by_hand)
+        out.append({"host": host, "instructions": instructions, "server": pointed, "next": "; ".join(todo) or None})
+    return out
 
 
 # --- text --------------------------------------------------------------------------------------------------------
@@ -704,6 +849,9 @@ def text(doc: dict) -> str:
             out.append(f"{row['state']:<18} {row['path']} ({row['profile']})")
         if not doc["targets"]:
             out.append("No managed or unmanaged integration files found.")
+        out.append("")
+        for host in doc.get("hosts", []):
+            out.append(f"{host['host']}: instructions {host['instructions'] or 'none'}; server {host['server'] or 'none'}" + (f"; next: {host['next']}" if host["next"] else ""))
         return "\n".join(out) + "\n"
     verb = {"create": "would create", "update": "would update", "remove": "would remove", "forget": "would forget", "unchanged": "unchanged"} if doc["dry_run"] or doc["conflicts"] else {}
     for row in doc["actions"]:
