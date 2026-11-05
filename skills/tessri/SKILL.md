@@ -17,6 +17,10 @@ Pick the query by the task, and do not start every task with a full scan:
 - checking a claim about one file: `tessri why <path>` (`--format json` gives the same facts as data)
 - getting to know a repository, or planning a cleanup: `tessri scan` and `tessri graph`
 
+When Tessri is connected as an MCP server (`tessri mcp`), the same questions are the tools `tessri_scan`,
+`tessri_why`, `tessri_impact`, `tessri_graph`, `tessri_triage` and `tessri_check`; each returns the command's
+JSON as structured content and its text as content, and `tessri_repos` lists the checkouts the server reads.
+
 ## Run it
 
 For a repository overview:

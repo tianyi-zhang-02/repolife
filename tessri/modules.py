@@ -430,6 +430,7 @@ def impact(a: Analysis, target: str, depth: int | None = None, limit: int = IMPA
         reached = [p for p, d in narrow.items() if p not in seed_set and p in a.records]
         evidence["imports_only"] = {"files": sum(not a.records[p].is_test for p in reached), "tests": sum(a.records[p].is_test for p in reached)}
     out = {
+        "schema_version": SCHEMA_VERSION,
         "target": label,
         "kind": kind,
         "meta": meta.of(a),

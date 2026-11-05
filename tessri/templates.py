@@ -52,6 +52,10 @@ Pick the query by the task, and do not start every task with a full scan:
 - checking a claim about one file: `tessri why <path>` (`--format json` gives the same facts as data)
 - getting to know a repository, or planning a cleanup: `tessri scan` and `tessri graph`
 
+When Tessri is connected as an MCP server (`tessri mcp`), the same questions are the tools `tessri_scan`,
+`tessri_why`, `tessri_impact`, `tessri_graph`, `tessri_triage` and `tessri_check`; each returns the command's
+JSON as structured content and its text as content, and `tessri_repos` lists the checkouts the server reads.
+
 ## Run it
 
 For a repository overview:
@@ -225,6 +229,16 @@ Before deleting a cleanup candidate, use `tessri why <path>` and a repository-wi
 can miss runtime wiring and external consumers; activity alone does not establish disuse. Files intentionally
 kept can go under `keep` in `.tessri.toml`. Delete in small changes and run the project's tests.
 """
+
+# The skill as Copilot's path-scoped instructions: the same text under the frontmatter that file format wants.
+COPILOT_INSTRUCTIONS = '---\napplyTo: "**"\n---\n' + SKILL.split("---\n", 2)[2]
+
+# One entry each in the MCP configuration files hosts read from a project; the receipt records the entry, not the file.
+MCP_SERVER = {"command": "tessri", "args": ["mcp"]}  # `.mcp.json`, key mcpServers.tessri
+VSCODE_SERVER = {"type": "stdio", "command": "tessri", "args": ["mcp"]}  # `.vscode/mcp.json`, key servers.tessri
+# Copilot's coding agent takes its servers from the repository's settings page; this is the JSON to paste there.
+COPILOT_AGENT_SERVERS = {"mcpServers": {"tessri": {"command": "tessri", "args": ["mcp"], "tools": ["*"]}}}
+CODEX_MCP_COMMAND = "codex mcp add tessri -- tessri mcp"  # Codex keeps MCP servers in the user's configuration, not the project's
 
 GITHUB_WORKFLOW = """\
 name: tessri

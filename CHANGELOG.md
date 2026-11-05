@@ -4,6 +4,21 @@ Dates are the day a version was tagged.
 
 ## Unreleased
 
+- `tessri mcp`: the questions as Model Context Protocol tools over stdin/stdout, with nothing installed. Seven
+  read-only tools mirror the commands (`tessri_repos`, `tessri_scan`, `tessri_why`, `tessri_impact`,
+  `tessri_graph`, `tessri_triage`, `tessri_check`); each returns the command's `--format json` object as
+  `structuredContent` and its text as `content`, from one analysis. `--root` is repeatable, so one server serves
+  several checkouts and a tool names one with `root`. A mistake in the arguments is a tool result in the sentence
+  the command prints; a malformed request is a JSON-RPC error. Both the 2026-07-28 revision of the protocol
+  (`_meta` version, `server/discover`) and the earlier `initialize` handshake are spoken.
+- `tessri integration` gains three profiles: `mcp` (the `mcpServers.tessri` entry in `.mcp.json`), `vscode` (the
+  `servers.tessri` entry in `.vscode/mcp.json`) and `copilot` (`.github/instructions/tessri.instructions.md`, the
+  skill under Copilot's frontmatter). An entry profile records the entry, not the file: an existing file keeps its
+  other entries; one that cannot be read as JSON, or already has the entry, is a conflict. `status` says per host
+  which file carries its instructions, which points it at the server, and what is left to do, with the line to run
+  for Codex and the JSON to paste for Copilot's coding agent. The skill and `AGENTS.md` block name the tools.
+- JSON: the scan object carries `kind: "scan"` and the impact object `schema_version`, which the JSON guide said it
+  had; nothing else changed and `schema_version` stays 1.
 - A page (`.html`) wires in what it loads and only mentions what it says. Its `src` attributes, `<link href>` and
   inline `<script>` code are wiring, as before (`<script src="/src/main.tsx">` makes that file an entry point);
   its text, its hyperlinks and its other attributes are now a mention, like a README's, where every path in the

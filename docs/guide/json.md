@@ -4,7 +4,7 @@ Every command prints one JSON object with `--format json`, versioned by `schema_
 `meta` block, so an agent can read any answer as data.
 
 `tessri scan --format json` prints one object, versioned by `schema_version` (currently `1`; adding
-fields does not bump it). Top-level keys: `summary` (sizes, `by_status`, `orphans`, `test_only`,
+fields does not bump it), with `kind: "scan"`. Top-level keys: `summary` (sizes, `by_status`, `orphans`, `test_only`,
 `reachability_coverage`), `languages`, `directories` (with `owners` and `ownership` per directory), `ownership`
 (`authors`, `bus_factor`, `no_active_owner`, `top_authors`, `needs_owner_files`, `codeowners`; `{"available": false}`
 without git), `review` (`window`, `totals` with `bulk`, `unowned`, `areas`, `authors`, `reviewers`, `largest_changes`;
@@ -12,12 +12,14 @@ without git), `review` (`window`, `totals` with `bulk`, `unowned`, `areas`, `aut
 `caveats`, and with `--full` a per-file `files` table.
 
 `tessri graph --format json` and `tessri impact --format json` print their own objects (`kind` is `module-graph`,
-`file-graph`, or has `target` for an impact) with the same `schema_version`. `tessri why <path> --format json`
+`file-graph`, or `file` or `directory` with a `target` for an impact) with the same `schema_version`. `tessri why <path> --format json`
 prints the same facts the text shows, as data: `file`, `verdict` (`status`, `confidence`, `reachability`,
 `entry_points`, `notes`), `git`, `owners`, `graph` (`reached_via`, `dependents`, `config_refs`, `doc_refs`,
 `depends_on`, `stranded_if_removed`, and `kinds`: the kind of evidence behind each edge, as `impact` names them,
 for `reached_via` as one entry per hop and for `dependents` and `depends_on` as a map from path to kind) and
 `advice`; `git`, `owners` and `graph` are `null` when the analysis had nothing to say.
+
+The [MCP server](mcp.md) returns these same objects as each tool's `structuredContent`, unchanged.
 
 Every JSON object also carries a `meta` block with the same names everywhere: `tool`, `generated_at`, `repo`
 (`name`, `root`), and `git` with `available`, `reason` (`null`, or `not-a-repository`, `no-commits`,

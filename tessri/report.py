@@ -159,6 +159,7 @@ def build_report(a: Analysis, full: bool = False) -> dict:
         "tool": {"name": "tessri", "version": __version__},
         "generated_at": datetime.fromtimestamp(a.now, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "repo": {"name": a.root.name},
+        "kind": "scan",
         "meta": meta.of(a),
         "git": {
             "available": a.activity is not None,
