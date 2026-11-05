@@ -21,7 +21,9 @@ TREE = {
     "pkg/core.py": "import pkg.util\n",
     "pkg/util.py": "x = 1\n",
     "pkg/dead.py": "y = 2\n",
-    "scripts/run.py": "import pkg.core\n",
+    "pkg/loader.py": 'NAME = "pkg.plugin"\n',  # names pkg/plugin.py in a string
+    "pkg/plugin.py": "z = 3\n",
+    "scripts/run.py": 'import pkg.core\nLOADER = "pkg.loader"\n',
     "tests/test_core.py": "import pkg.core\n",
     "docs/guide.md": "See pkg/core.py.\n",
     "CODEOWNERS": "pkg/ @alice\n",
@@ -91,6 +93,22 @@ class FactsTest(Repo):
         self.assertIn("owners:        Alice 100% (silent 400d); NO ACTIVE OWNER", text)
         self.assertIn("reached via:   scripts/run.py -> pkg/core.py", text)
         self.assertIn("deleting it would also strand: pkg/util.py", text)
+
+    def test_every_edge_says_what_evidence_it_rests_on(self):
+        f = facts(self.a, "pkg/plugin.py")  # named in a string by pkg/loader.py, itself named in a string by the script
+        self.assertEqual(f["graph"]["reached_via"], ["scripts/run.py", "pkg/loader.py", "pkg/plugin.py"])
+        self.assertEqual(f["graph"]["kinds"], {"reached_via": ["string", "string"], "dependents": {"pkg/loader.py": "string"}, "depends_on": {}})
+        text = explain(self.a, "pkg/plugin.py")
+        self.assertIn("reached via:   scripts/run.py -(string)-> pkg/loader.py -(string)-> pkg/plugin.py", text)
+        self.assertIn("depended on by: pkg/loader.py (string)", text)
+        core = facts(self.a, "pkg/core.py")["graph"]["kinds"]
+        self.assertEqual(core["reached_via"], ["import"])
+        self.assertEqual(core["dependents"], {"scripts/run.py": "import", "tests/test_core.py": "import"})
+        self.assertEqual(core["depends_on"], {"pkg/__init__.py": "package", "pkg/util.py": "import"})
+        text = explain(self.a, "pkg/core.py")
+        self.assertIn("reached via:   scripts/run.py -> pkg/core.py\n", text)  # an import statement goes unmarked
+        self.assertIn("depended on by: scripts/run.py, tests/test_core.py\n", text)
+        self.assertRegex(text, r"depends on:    pkg/__init__\.py \[\w+\] \(package\), pkg/util\.py \[ACTIVE\]\n")
 
     def test_active_owner_is_not_silent(self):
         f = facts(self.a, "pkg/util.py")

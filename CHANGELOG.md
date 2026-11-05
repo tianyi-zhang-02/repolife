@@ -2,6 +2,20 @@
 
 Dates are the day a version was tagged.
 
+## Unreleased
+
+- A page (`.html`) wires in what it loads and only mentions what it says. Its `src` attributes, `<link href>` and
+  inline `<script>` code are wiring, as before (`<script src="/src/main.tsx">` makes that file an entry point);
+  its text, its hyperlinks and its other attributes are now a mention, like a README's, where every path in the
+  file used to count as wiring. On this repository the landing page's sentence about `tessri/graph.py` had made
+  that file and `tessri/config.py` "reachable from a production entry point" through `config-ref: site/index.html`;
+  `why` now shows the import route and lists the page under `mentioned in docs`. A page under `docs/` is all
+  mention, as before.
+- `why` says what evidence each edge rests on, with the names `impact` uses: `pkg/loader.py (string)` under
+  `depended on by` or `depends on`, and `-(string)->` for a hop of the `reached via` route; an import statement
+  goes unmarked. The JSON carries the same under `graph.kinds` (`reached_via`, `dependents`, `depends_on`); no
+  existing key changed.
+
 ## 0.2.0 (2026-11-04)
 
 **Tessri is the new name of repolife.** The project, the Python package, the command, the configuration, the

@@ -1,7 +1,7 @@
 """Language-agnostic reachability engine.
 
 Inputs come from analyzer plugins (edges, roots, tests) plus references found in
-config and scripts (textrefs). A file is:
+config, scripts and markup (textrefs). A file is:
 
   prod  - reachable from an entry point that is not a test
   test  - a test, or reachable only from tests
@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from dataclasses import dataclass, field
-from typing import Collection, Iterable, Mapping
+from typing import Collection, Iterable, Mapping, Sequence
 
 from . import inventory
 from .analyzers import LanguageResult, note
@@ -82,7 +82,7 @@ class Graph:
 def build(
     results: list[LanguageResult],
     analyzed: Collection[str],
-    scans: Mapping[str, TextScan],
+    scans: Mapping[str, Sequence[TextScan]],
     keep: Collection[str] = (),
     entry: Collection[str] = (),
 ) -> Graph:
@@ -107,16 +107,17 @@ def build(
         return found
 
     paths = PathIndex(g.analyzed)
-    for src, scan in scans.items():
-        targets: set[str] = set()
-        for ref in scan.dotted:
-            targets |= resolve(ref)
-        for token in scan.paths:
-            targets |= paths.resolve(token)
-        targets.discard(src)
-        bucket = g.doc_refs if scan.weak else g.config_refs
-        for t in targets:
-            bucket[t].add(src)
+    for src, found in scans.items():
+        for scan in found:
+            targets: set[str] = set()
+            for ref in scan.dotted:
+                targets |= resolve(ref)
+            for token in scan.paths:
+                targets |= paths.resolve(token)
+            targets.discard(src)
+            bucket = g.doc_refs if scan.weak else g.config_refs
+            for t in targets:
+                bucket[t].add(src)
 
     g.ambiguous = dict(paths.ambiguous)
     for target, sources in g.config_refs.items():
