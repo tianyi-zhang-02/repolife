@@ -52,6 +52,12 @@ def _fmt(items, empty="none", cap=12) -> str:
     return shown + (f" (+{len(items) - cap} more)" if len(items) > cap else "")
 
 
+def _kinded(label: str, kind: str) -> str:
+    """An edge's label with the kind of its evidence when that is anything but an import statement, so a string
+    reference or a package file is never mistaken for one; an import is the default and goes unmarked."""
+    return label if kind == "import" else f"{label} ({kind})"
+
+
 def facts(a: Analysis, target: str) -> dict:
     """What is known about one file, as data: the verdict and its reasons, the file's history, who maintains it
     and its place in the import graph. `git`, `owners` and `graph` are None when the analysis had nothing to say
@@ -108,13 +114,23 @@ def facts(a: Analysis, target: str) -> dict:
             "codeowners": None if found.declared is None else {"declared": list(found.declared), "match": found.declared_match},
         }
     if rec.analyzer:
+        route = g.chain(path)
+        dependents = sorted(g.inbound.get(path, ()))
+        depends_on = sorted(g.edges.get(path, ()))
         out["graph"] = {
-            "reached_via": g.chain(path),
-            "dependents": sorted(g.inbound.get(path, ())),
+            "reached_via": route,
+            "dependents": dependents,
             "config_refs": sorted(g.config_refs.get(path, ())),
             "doc_refs": sorted(g.doc_refs.get(path, ())),
-            "depends_on": [{"path": d, "status": a.records[d].status if d in a.records else None} for d in sorted(g.edges.get(path, ()))],
+            "depends_on": [{"path": d, "status": a.records[d].status if d in a.records else None} for d in depends_on],
             "stranded_if_removed": g.stranded_if_removed(path),
+            # The evidence behind each edge above (analyzers.KINDS): an import statement, a package file Python runs,
+            # a dynamic-import pattern, a name in a string, or unknown. `reached_via` has one entry per hop.
+            "kinds": {
+                "reached_via": [g.kind(src, dst) for src, dst in zip(route, route[1:])],
+                "dependents": {d: g.kind(d, path) for d in dependents},
+                "depends_on": {d: g.kind(path, d) for d in depends_on},
+            },
         }
     return out
 
@@ -156,12 +172,15 @@ def render(f: dict) -> str:
 
     graph = f["graph"]
     if graph is not None:
+        kinds = graph["kinds"]
         if len(graph["reached_via"]) > 1:
-            out.append("reached via:   " + " -> ".join(graph["reached_via"]))
-        out.append(f"depended on by: {_fmt(graph['dependents'])}")
+            route = graph["reached_via"]
+            hops = "".join(f" -> {dst}" if kind == "import" else f" -({kind})-> {dst}" for dst, kind in zip(route[1:], kinds["reached_via"]))
+            out.append("reached via:   " + route[0] + hops)
+        out.append(f"depended on by: {_fmt(_kinded(d, kinds['dependents'][d]) for d in graph['dependents'])}")
         out.append(f"named in config/scripts: {_fmt(graph['config_refs'])}")
         out.append(f"mentioned in docs: {_fmt(graph['doc_refs'])}")
-        out.append("depends on:    " + _fmt(f"{d['path']} [{d['status']}]" if d["status"] else d["path"] for d in graph["depends_on"]))
+        out.append("depends on:    " + _fmt(_kinded(f"{d['path']} [{d['status']}]" if d["status"] else d["path"], kinds["depends_on"][d["path"]]) for d in graph["depends_on"]))
         if graph["stranded_if_removed"]:
             out.append(f"deleting it would also strand: {_fmt(graph['stranded_if_removed'])}")
 

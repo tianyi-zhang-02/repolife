@@ -148,20 +148,22 @@ def analyze(root: Path, cfg: Config, now: float | None = None, analyzers: list[A
         analyzed.update({p: plugin.name for p in mine})
 
     unparsed = set().union(*(r.unparsed for r in results)) if results else set()
-    scans: dict[str, textrefs.TextScan] = {}
+    scans: dict[str, list[textrefs.TextScan]] = {}  # a file's references; a page has its wiring and its mentions apart
     for path, lang in langs.items():
         if path in unparsed:
-            scans[path] = textrefs.scan_text(texts[path])
+            scans[path] = [textrefs.scan_text(texts[path])]
         elif path in analyzed:
             continue
         elif posixpath.basename(path) == "pyproject.toml":
-            scans[path] = textrefs.scan_pyproject(texts[path])
+            scans[path] = [textrefs.scan_pyproject(texts[path])]
         elif posixpath.basename(path) == "setup.cfg":
-            scans[path] = textrefs.scan_setup_cfg(texts[path])
+            scans[path] = [textrefs.scan_setup_cfg(texts[path])]
         else:
             mode = textrefs.scan_mode(path, lang.name, lang.kind)
-            if mode:
-                scans[path] = textrefs.scan_text(texts[path], weak=mode == "weak")
+            if mode == "strong" and lang.name == "HTML":
+                scans[path] = list(textrefs.scan_html(texts[path]))
+            elif mode:
+                scans[path] = [textrefs.scan_text(texts[path], weak=mode == "weak")]
 
     g = graph.build(results, analyzed, scans, cfg.keep, cfg.entry)
     # History is read whether or not git supplied the file list: a repository whose commits hold no files yet still

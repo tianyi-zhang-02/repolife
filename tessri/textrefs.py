@@ -1,14 +1,16 @@
-"""Language-neutral references found in non-code text: configs, scripts, CI files, docs.
+"""Language-neutral references found in non-code text: configs, scripts, CI files, markup, docs.
 
 Frameworks wire code together by name: hydra `_target_: pkg.mod.Class`, registries,
-console-script entry points, `python examples/run.py` in a shell script. A pure import
-graph misses all of that, so these references are extracted separately and resolved
-against the analyzers' module indexes.
+console-script entry points, `python examples/run.py` in a shell script, `<script src>` in a
+page. A pure import graph misses all of that, so these references are extracted separately
+and resolved against the analyzers' module indexes. A mention in documentation is kept
+apart from wiring: it lowers the confidence of a verdict without changing it.
 """
 
 from __future__ import annotations
 
 import configparser
+import html
 import posixpath
 import re
 import tomllib
@@ -56,7 +58,7 @@ def scan_mode(path: str, lang_name: str, kind: str) -> str | None:
         return "weak"
     if lang_name == "JSON" and name not in WIRING_JSON:
         return "weak"  # JSON is overwhelmingly data and generated output
-    if kind == "config" or lang_name in ("Shell", "HTML"):  # <script src="/src/main.tsx"> is wiring
+    if kind == "config" or lang_name in ("Shell", "HTML"):  # <script src="/src/main.tsx"> is wiring; see scan_html
         return "strong"
     return None
 
@@ -76,6 +78,38 @@ def scan_text(text: str, weak: bool = False) -> TextScan:
             scan.dotted.add(token)
     scan.paths.update(CODEPATH.findall(text))
     return scan
+
+
+# Markup. A page wires in what it loads; what it says, and what it links to, is a mention.
+_HTML_COMMENT = re.compile(r"<!--.*?-->", re.S)
+_HTML_BLOCK = re.compile(r"(<(script|style)\b[^>]*>)(.*?)</\2\s*>", re.S | re.I)  # inline code or style, with its open tag
+_HTML_TAG = re.compile(r"<(/?)([A-Za-z][\w:-]*)((?:\s+[^\s=>/]+(?:\s*=\s*(?:\"[^\"]*\"|'[^']*'|[^\s>]+))?)*)\s*/?>", re.S)
+_HTML_ATTR = re.compile(r"([^\s=>/]+)\s*=\s*(?:\"([^\"]*)\"|'([^']*)'|([^\s>]+))")
+LOADED = frozenset({"src", "srcset", "poster", "data"})  # attributes whose value the browser fetches; `href` only on <link>
+
+
+def scan_html(text: str) -> tuple[TextScan, TextScan]:
+    """A page as (wiring, mentions). Wiring is what the page loads (a `src`, a `<link href>`) and the code in its
+    inline `<script>` blocks: `<script src="/src/main.tsx">` makes that file an entry point. Everything else is a
+    mention: the page's text, a hyperlink (`<a href>`), any other attribute. A landing page or a committed docs
+    page that names `pkg/core.py` in a sentence or links to it is documentation, like a README."""
+    text = _HTML_COMMENT.sub(" ", text)
+    loaded: list[str] = []
+    said: list[str] = []
+
+    def keep_tag(m: re.Match) -> str:
+        if m.group(2).lower() == "script" and m.group(3).strip():
+            loaded.append(m.group(3))
+        return m.group(1)  # the open tag stays, so its `src` is read below
+
+    text = _HTML_BLOCK.sub(keep_tag, text)
+    for m in _HTML_TAG.finditer(text):
+        tag = m.group(2).lower()
+        for a in _HTML_ATTR.finditer(m.group(3)):
+            name, value = a.group(1).lower(), a.group(2) or a.group(3) or a.group(4) or ""
+            (loaded if name in LOADED or (name == "href" and tag == "link") else said).append(html.unescape(value))
+    said.append(html.unescape(_HTML_TAG.sub(" ", text)))
+    return scan_text("\n".join(loaded)), scan_text("\n".join(said), weak=True)
 
 
 def scan_pyproject(text: str) -> TextScan:

@@ -26,12 +26,12 @@ What can a change to one file affect? On this repository:
 
 ```text
 $ tessri impact tessri/graph.py
-Changing tessri/graph.py  (1 file, 109 code lines) can affect:
+Changing tessri/graph.py  (1 file, 110 code lines) can affect:
 
-- **13 code files** in **2 modules** (36.1% of the code), 1 of them directly (one followed edge away)
-- **17 test files** reaching it (candidates to run, not runs), 0 directly
+- **13 code files** in **2 modules** (35.1% of the code), 1 of them directly (one followed edge away)
+- **19 test files** reaching it (candidates to run, not runs), 0 directly
 - code files by number of followed edges away: 1: 1, 2: 9, 3: 3
-- edges followed, any number of steps: recognized dependency syntax, package files, and 0 references found in strings, dynamic loading or unclassified evidence; syntax and package files alone reach 13 code files and 17 test files
+- edges followed, any number of steps: recognized dependency syntax, package files, and 0 references found in strings, dynamic loading or unclassified evidence; syntax and package files alone reach 13 code files and 19 test files
 
 | Affected module | Files | Direct | Owners | State |
 |---|---:|---:|---|---|
@@ -40,7 +40,7 @@ Changing tessri/graph.py  (1 file, 109 code lines) can affect:
 
 People who maintain the affected code (tell them, or ask them to review): Tianyi Zhang 100%
 
-Tests that reach it, nearest first: `tests/test_htmlreport.py`, `tests/test_javascript.py`, `tests/test_meta.py`, `tests/test_modules.py`, `tests/test_ownership.py`, `tests/test_provenance.py`, `tests/test_renames.py`, `tests/test_resolve.py`, `tests/test_review.py`, `tests/test_tessri.py` and 7 more
+Tests that reach it, nearest first: `tests/test_htmlreport.py`, `tests/test_javascript.py`, `tests/test_markup.py`, `tests/test_meta.py`, `tests/test_modules.py`, `tests/test_moves.py`, `tests/test_ownership.py`, `tests/test_provenance.py`, `tests/test_renames.py`, `tests/test_resolve.py` and 9 more
 
 It depends on: `tessri` (2), `tessri/analyzers` (1)
 

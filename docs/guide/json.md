@@ -15,8 +15,9 @@ without git), `review` (`window`, `totals` with `bulk`, `unowned`, `areas`, `aut
 `file-graph`, or has `target` for an impact) with the same `schema_version`. `tessri why <path> --format json`
 prints the same facts the text shows, as data: `file`, `verdict` (`status`, `confidence`, `reachability`,
 `entry_points`, `notes`), `git`, `owners`, `graph` (`reached_via`, `dependents`, `config_refs`, `doc_refs`,
-`depends_on`, `stranded_if_removed`) and `advice`; `git`, `owners` and `graph` are `null` when the analysis had
-nothing to say.
+`depends_on`, `stranded_if_removed`, and `kinds`: the kind of evidence behind each edge, as `impact` names them,
+for `reached_via` as one entry per hop and for `dependents` and `depends_on` as a map from path to kind) and
+`advice`; `git`, `owners` and `graph` are `null` when the analysis had nothing to say.
 
 Every JSON object also carries a `meta` block with the same names everywhere: `tool`, `generated_at`, `repo`
 (`name`, `root`), and `git` with `available`, `reason` (`null`, or `not-a-repository`, `no-commits`,

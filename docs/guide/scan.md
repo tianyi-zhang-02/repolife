@@ -28,6 +28,11 @@ depends on:    none
 note:          only referenced by other unreachable files
 ```
 
+Each edge `why` lists carries the kind of evidence behind it, as `impact` names them, when that is anything but an
+import statement: `pkg/loader.py (string)` depends on the file through a name in a string, `pkg/__init__.py [STABLE]
+(package)` is the package file Python runs for an import, and a hop on the `reached via` route reads
+`scripts/run.py -(string)-> pkg/loader.py`. An unmarked edge is an import.
+
 The report's candidate table, most confident first:
 
 | File | Code | Confidence | Last commit | Notes |
@@ -73,6 +78,11 @@ Tests are entry points of their own: code reached only from tests is reported as
 Deliberately **not** evidence of use, for any language: tool configs that merely list files (`pyrefly.toml`,
 `mypy.ini`, `.coveragerc`, lint sections), JSON data, docs, and anything under `docs/`/`reports/`.
 Docs and data count as a *mention*, which lowers confidence but does not rescue a file.
+
+A page (`.html`) is read in two parts. What it loads is wiring: a `src`, a `<link href>` and the code in its
+inline `<script>` blocks, so `<script src="/src/main.tsx">` makes that file an entry point. What it says is a
+mention: its text, a hyperlink (`<a href>`) and any other attribute. A landing page that names `pkg/core.py` in a
+sentence documents the file, like a README does, and does not keep it alive. A page under `docs/` is all mention.
 
 A file name found in a config, a script or a string names a file only when it fits exactly one. A bare `utils.py`
 in a repository with ninety of them names none of them, and the report's caveats list such names with how many
