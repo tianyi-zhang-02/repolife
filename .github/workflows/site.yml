@@ -1,6 +1,6 @@
 # The site (site/ plus docs/guide/, built by tools/build_site.py with nothing installed) to GitHub Pages, on every
 # push to main that touches it. One-time setup in the repository: Settings → Pages → Build and deployment → Source:
-# GitHub Actions. Until then the deploy job fails and nothing else is affected.
+# GitHub Actions. Until then the build job fails at its configure-pages step and nothing else is affected.
 name: site
 
 on:
