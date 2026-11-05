@@ -1,8 +1,8 @@
 # Changelog
 
-Dates are the day a version was tagged. Until 0.2.0 is tagged, its entry describes the `main` branch.
+Dates are the day a version was tagged.
 
-## 0.2.0 (unreleased)
+## 0.2.0 (2026-11-04)
 
 **Tessri is the new name of repolife.** The project, the Python package, the command, the configuration, the
 integration receipt, the bundled skill, the SARIF output and the repository are all called `tessri` now. The old
@@ -42,8 +42,7 @@ Also in this version:
 - Git history follows the renames git detects: activity, authors, fix counts, ownership credit and the review
   windows are read under a file's current name, so a move no longer restarts its history (this repository's own
   rename had made every file look one commit old). A pure move is activity but credits nobody with maintenance.
-  A file rewritten beyond git's similarity threshold when moved starts over; a path re-created after a move is a new file. `triage` and `check` still treat a move as a deletion
-  and an addition.
+  A file rewritten beyond git's similarity threshold when moved starts over; a path re-created after a move is a new file.
 - A file name that several files share names none of them. A bare `utils.py` in a config, a script or a string used
   to resolve to every `utils.py` in the repository (on one 2,000-file repository, fourteen such names fanned out to
   701 files, `__init__.py` alone to 432), making them all reachable and giving each a `string` edge; now such a name
@@ -61,6 +60,9 @@ Also in this version:
   rename, `check` went from 84 code files (37 added, 31 deleted), 17,292 lines, a false new cycle and a false resolved
   one to 53 code files (6 added, 16 modified, 31 moved), 1,790 lines and no finding; `triage` had ranked the twelve
   deleted `repolife/*.py` paths first and now ranks the moved files by their history.
+- A site: the landing page and the guide at https://tianyi-zhang-02.github.io/tessri/, built from the README and
+  `docs/guide/` by `tools/build_site.py` with nothing installed (no framework, no webfont, no request to anyone
+  else), and published by a workflow on every push to `main` that touches them.
 
 ## 0.1.0
 
