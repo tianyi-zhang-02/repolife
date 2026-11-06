@@ -113,13 +113,15 @@ def _reach(rev: dict[str, set[str]], start: str, hops: int) -> dict[str, int]:
     return seen
 
 
-def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None) -> dict:
-    """The triage of the change between `since` and the working tree, as the JSON-ready dict the commands print."""
+def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None, analysis: Analysis | None = None) -> dict:
+    """The triage of the change between `since` and the working tree, as the JSON-ready dict the commands print.
+    `analysis` is the working tree analysed with history read up to the base and review load off, when the caller
+    has made it already (`brief` makes one for triage and check); otherwise it is made here."""
     root = Path(root).resolve()
     base, head = resolve_base(root, since)
     diff = _diff(root, base)
     dirty = bool(_git(root, "status", "--porcelain", "--untracked-files=normal").strip())
-    a = analyze(root, dataclasses.replace(cfg, review_days=0), now=now, rev=base)
+    a = analysis if analysis is not None else analyze(root, dataclasses.replace(cfg, review_days=0), now=now, rev=base)
     if a.activity is None or a.ownership is None:
         raise TriageError("triage needs git history")
     own, g = a.ownership, a.graph

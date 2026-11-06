@@ -20,16 +20,17 @@ repository ─► inventory ─► analyzers ─► graph ─► analyze ─► 
 | Reachability | `graph` | walks from entry points and config references; tests are roots of their own, so test-only code stays visible |
 | History | `gitlog`, `ownership` | history is read once up to a rev for per-file activity and fix commits, and once more for the two review windows; `GitState` says why history is or is not there; ownership credits authors with yearly decay, marks owners who went quiet and compares with `CODEOWNERS` |
 | Verdict | `analyze`, `model` | one `FileRecord` per file, the status rules, and the `Analysis` everything below reads |
-| Views | `report` + `render` (scan, Markdown and JSON), `htmlreport` + `htmlassets` + `graphview` (HTML, mermaid, dot), `explain` (why), `modules` (graph, impact), `review` (review load), `triage`, `since` + `sinceview` + `sarifview` (check), `mcp` (the same answers as tools over stdin/stdout) | each computes its own tables from an `Analysis` and renders them; `render` is the shared Markdown, `meta` the shared `meta` block |
+| Views | `report` + `render` (scan, Markdown and JSON), `htmlreport` + `htmlassets` + `graphview` (HTML, mermaid, dot), `explain` (why), `modules` (graph, impact), `review` (review load), `triage`, `since` + `sinceview` + `sarifview` (check), `brief` (triage and check from one pair of analyses, on one page), `mcp` (the same answers as tools over stdin/stdout) | each computes its own tables from an `Analysis` and renders them; `render` is the shared Markdown, `meta` the shared `meta` block |
 | Front door | `cli` | argparse, `--format` and `--out`, and the exit codes: 0; 1 for a `--fail-on` gate that failed or an integration plan blocked by conflicts, always with the complete result; 2 for a caught error, with nothing on stdout |
 | Into other repositories | `templates`, `mount`, `integration` | the skill text, the legacy `init`, and the receipt-based install, update, status and remove |
 
-Two commands run the pipeline against another revision. `triage` analyses the working tree with history read up to the
+Three commands run the pipeline against another revision. `triage` analyses the working tree with history read up to the
 base of the change, so the change's own commits count neither as activity nor as ownership. `check` extracts the base
 from git objects into a scratch directory (`cat-file --batch`, never `git archive`, which honours export-ignore),
 analyses both sides with the same settings and compares only the import graph and the reachability of each file;
-status, confidence and owners are never compared between the two analyses. Only `inventory`, `gitlog`, `triage` and
-`since` run git; the analyzers and views never shell out, and nothing fetches, caches or calls a model, so the same tree
+status, confidence and owners are never compared between the two analyses. `brief` makes those two analyses once and
+hands them to both `triage` and `check`, so its page costs what `check` costs. Only `inventory`, `gitlog`, `triage`, `since`
+and `brief` run git; the analyzers and views never shell out, and nothing fetches, caches or calls a model, so the same tree
 and history give the same output. The tests in `tests/`, one file per area, build small repositories in temporary
 directories with fixed commit dates and assert on the output, so the suite needs git and nothing else, except `node`
 for the one test that runs the HTML page's script, which is skipped without it.

@@ -1,4 +1,4 @@
-"""Command line entry point: `tessri scan | why | graph | impact | triage | check | init | integration | mcp`."""
+"""Command line entry point: `tessri scan | why | graph | impact | triage | check | brief | init | integration | mcp`."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, config, graphview, htmlreport, integration, legacy, modules, sarifview, since, sinceview
+from . import __version__, brief, config, graphview, htmlreport, integration, legacy, modules, sarifview, since, sinceview
 from .analyze import analyze
 from .explain import TargetError, explain, why_json
 from .render import markdown
@@ -152,6 +152,18 @@ def _cmd_check(args: argparse.Namespace) -> int:
     return 1 if since.failing(result, args.fail_on) else 0
 
 
+def _cmd_brief(args: argparse.Namespace) -> int:
+    root = _root(args.repo)
+    cfg = _config_for(root, args)
+    try:
+        result = brief.compute(root, cfg, args.since, ran=args.ran, limit=args.limit)
+    except brief.BriefError as exc:
+        print(f"tessri: {exc}", file=sys.stderr)
+        return 2
+    _emit(json.dumps(result, indent=2) + "\n" if args.format == "json" else brief.markdown(result), args.out)
+    return 0
+
+
 def _cmd_impact(args: argparse.Namespace) -> int:
     root = _root(args.repo)
     analysis = analyze(root, _config_for(root, args))
@@ -263,6 +275,16 @@ def build_parser() -> argparse.ArgumentParser:
     check.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
     _add_analysis_options(check)
     check.set_defaults(func=_cmd_check)
+
+    briefp = sub.add_parser("brief", help="one page to hand a change over: triage and check from one analysis, the commits and uncommitted files in scope, candidate tests apart from the checks the host ran, and what needs a person")
+    briefp.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
+    briefp.add_argument("--repo", default=".", help="repository root (default: .)")
+    briefp.add_argument("--format", choices=("md", "json"), default="md", help="json: the brief's sections plus the whole triage and check objects")
+    briefp.add_argument("--limit", type=int, default=brief.LISTED, metavar="N", help=f"files in the look-first table (default {brief.LISTED}); the JSON always carries them all")
+    briefp.add_argument("--ran", action="append", default=[], metavar="TEXT", help="a check the host actually ran, with its result and exit code, recorded verbatim (repeatable); without it the brief says that none was recorded")
+    briefp.add_argument("--out", metavar="FILE", help="write the brief to FILE instead of stdout")
+    _add_analysis_options(briefp)
+    briefp.set_defaults(func=_cmd_brief)
 
     init = sub.add_parser("init", help="mount Tessri into a repository: config, agent skill, AGENTS.md block, optional CI")
     init.add_argument("path", nargs="?", default=".", help="repository root (default: .)")

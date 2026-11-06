@@ -4,9 +4,20 @@ Dates are the day a version was tagged.
 
 ## Unreleased
 
-- `tessri mcp`: the questions as Model Context Protocol tools over stdin/stdout, with nothing installed. Seven
+- `tessri brief --since <base>`: one page to hand a change over, with the sections the review-brief design asked for.
+  It is triage and check from one pair of analyses (the base and the working tree, each analysed once, so the page
+  costs what `check` costs): the exact state the evidence describes (full base and HEAD, the commits on the way in
+  their authors' words, the uncommitted files in scope), the files to look at first with triage's reasons, the
+  findings, the candidate tests kept apart from the checks the host ran (`--ran`, repeatable, recorded verbatim;
+  without it the page says that none was recorded, and an execution is never inferred from a candidate), who can
+  look, what needs a person, and what was not analysed (a changed file in a language without an analyzer is named,
+  not dropped). Every shortened list carries its count, and the JSON (`kind: "brief"`) holds the whole `triage` and
+  `check` objects. The MCP server serves it as `tessri_brief` (`ran` is an array of strings); the skill, the
+  `AGENTS.md` block and Copilot's instructions name it. `triage.compute` and `since.check` take analyses the caller
+  made (`analysis=`, `analyses=`); without them they work as before.
+- `tessri mcp`: the questions as Model Context Protocol tools over stdin/stdout, with nothing installed. Eight
   read-only tools mirror the commands (`tessri_repos`, `tessri_scan`, `tessri_why`, `tessri_impact`,
-  `tessri_graph`, `tessri_triage`, `tessri_check`); each returns the command's `--format json` object as
+  `tessri_graph`, `tessri_triage`, `tessri_check`, `tessri_brief`); each returns the command's `--format json` object as
   `structuredContent` and its text as `content`, from one analysis. `--root` is repeatable, so one server serves
   several checkouts and a tool names one with `root`. A mistake in the arguments is a tool result in the sentence
   the command prints; a malformed request is a JSON-RPC error. Both the 2026-07-28 revision of the protocol

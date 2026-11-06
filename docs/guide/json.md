@@ -17,7 +17,10 @@ prints the same facts the text shows, as data: `file`, `verdict` (`status`, `con
 `entry_points`, `notes`), `git`, `owners`, `graph` (`reached_via`, `dependents`, `config_refs`, `doc_refs`,
 `depends_on`, `stranded_if_removed`, and `kinds`: the kind of evidence behind each edge, as `impact` names them,
 for `reached_via` as one entry per hop and for `dependents` and `depends_on` as a map from path to kind) and
-`advice`; `git`, `owners` and `graph` are `null` when the analysis had nothing to say.
+`advice`; `git`, `owners` and `graph` are `null` when the analysis had nothing to say. `tessri brief --format json`
+prints `kind: "brief"`: its own sections (`change` with the full base and head, the commits on the way and the
+uncommitted files in scope; `attention`; `consequences`, with `not_analysed`; `validation`, with `candidates` and
+`ran`; `people`; `open`) and, whole, the `triage` and `check` objects it was composed from.
 
 The [MCP server](mcp.md) returns these same objects as each tool's `structuredContent`, unchanged.
 
@@ -25,8 +28,8 @@ Every JSON object also carries a `meta` block with the same names everywhere: `t
 (`name`, `root`), and `git` with `available`, `reason` (`null`, or `not-a-repository`, `no-commits`,
 `git-not-found`, `git-error`, `not-requested`), `head` (the checkout's HEAD, resolved on its own), `history_rev`
 (the commit history was read up to: HEAD for a scan, the base for `triage` and `check`), `shallow` and `commits`.
-All ids are full object ids. `triage` and `check` add `meta.change` (`since`, `base`, `head`, `uncommitted`), and
-`check` adds `meta.analysis`, which says `skipped` with reason `no-code-changes` when nothing was compared, so an
+All ids are full object ids. `triage`, `check` and `brief` add `meta.change` (`since`, `base`, `head`, `uncommitted`),
+and `check` and `brief` add `meta.analysis`, which says `skipped` with reason `no-code-changes` when nothing was compared, so an
 empty `findings` list is never mistaken for a clean comparison. The older top-level fields (`git` in a scan, the
 short `change.base` and `change.head` of `triage` and `check`) keep their meaning. A caught error (an unknown base,
 a directory that is not a repository) exits 2 and prints nothing on stdout; exit 1 is reserved for `check

@@ -35,7 +35,7 @@ ASSETS = ("tessri.css", "favicon.svg")
 GROUPS = [
     ("Start", ["getting-started"]),
     ("Questions", ["scan", "ownership", "review-load", "graph", "impact"]),
-    ("Changes", ["triage", "check"]),
+    ("Changes", ["triage", "check", "brief"]),
     ("Output", ["html-report", "json"]),
     ("Setup", ["integration", "mcp", "configuration"]),
     ("Reference", ["architecture", "limits", "formerly-repolife"]),
