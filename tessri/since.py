@@ -54,6 +54,23 @@ def _git(root: Path, *args: str, check: bool = True, binary: bool = False):
     return res.stdout if binary else res.stdout.decode("utf-8", "replace")
 
 
+DEFAULT_BRANCHES = ("origin/main", "origin/master", "main", "master")  # tried in this order when the remote declares no default
+
+
+def default_since(root: Path) -> str:
+    """The ref a change is compared with when the caller names none: the branch the remote declares as its default
+    (`origin/HEAD`), else the first of `DEFAULT_BRANCHES` that exists, else `HEAD`, which is the uncommitted work
+    alone. A remote-tracking branch comes before a local one of the same name because the local one may be stale."""
+    declared = _git(root, "symbolic-ref", "--quiet", "--short", "refs/remotes/origin/HEAD", check=False).strip()
+    if declared:
+        return declared
+    for name in DEFAULT_BRANCHES:
+        ref = f"refs/remotes/{name}" if name.startswith("origin/") else f"refs/heads/{name}"
+        if _git(root, "rev-parse", "--verify", "--quiet", ref, check=False).strip():
+            return name
+    return "HEAD"
+
+
 def resolve_base(root: Path, since: str) -> tuple[str, str, str]:
     """(commit to compare with, HEAD, path of `root` inside the repository): the point where `since` and HEAD part,
     which is how a pull request is judged."""
@@ -333,12 +350,14 @@ def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, gitlog.FileCh
     }
 
 
-def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None, analyses: tuple[Analysis, Analysis] | None = None) -> dict:
-    """The JSON-ready result of comparing `since` (as it was where it left HEAD) with the working tree. `analyses` is
-    the pair (base, working tree with history up to the base), both with review load off, when the caller has made
-    them already (`brief` makes one pair for triage and check); otherwise they are made here."""
+def check(root: Path, cfg: Config, since: str | None = None, now: float | None = None, analyses: tuple[Analysis, Analysis] | None = None) -> dict:
+    """The JSON-ready result of comparing `since` (as it was where it left HEAD; `default_since` when None) with the
+    working tree. `analyses` is the pair (base, working tree with history up to the base), both with review load off,
+    when the caller has made them already (`brief` makes one pair for triage and check); otherwise they are made here."""
     root = Path(root).resolve()
     now = time.time() if now is None else now
+    if since is None:
+        since = default_since(root)
     base, head, prefix = resolve_base(root, since)
     skip = [*inventory.DEFAULT_EXCLUDES, *cfg.exclude]
     changed = {p: c for p, c in sorted(changed_files(root, base).items()) if not inventory.matches(p, skip)}

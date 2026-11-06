@@ -460,7 +460,9 @@ class CliTest(Branchy):
         code, out, _ = run_cli("check", "--repo", str(self.root), "--since", "main", "--format", "json", "--fail-on", "warn")
         self.assertEqual(code, 1)
         self.assertEqual(json.loads(out)["change"]["since"], "main")
-        self.assertEqual(run_cli("check", "--repo", str(self.root), "--fail-on", "warn")[0], 0)  # nothing uncommitted
+        code, out, _ = run_cli("check", "--repo", str(self.root), "--format", "json", "--fail-on", "warn")  # without --since: the same, main being the default branch
+        self.assertEqual((code, json.loads(out)["change"]["since"]), (1, "main"))
+        self.assertEqual(run_cli("check", "--repo", str(self.root), "--since", "HEAD", "--fail-on", "warn")[0], 0)  # nothing uncommitted
 
     def test_the_result_can_be_written_to_a_file(self):
         self.commit(BASE)
@@ -489,6 +491,53 @@ class CliTest(Branchy):
         write_tree(self.root, {"vendor/lib.py": "VALUE = 1\n"})
         out = run_cli("check", "--repo", str(self.root), "--format", "json", "--exclude", "vendor/*")[1]
         self.assertEqual(json.loads(out)["summary"]["files"], 0)
+
+
+class DefaultSinceTest(TempRepo):
+    """Without `--since`, the change is judged against the default branch: the one the remote declares, else the
+    usual names with the remote-tracking branch first, else HEAD."""
+
+    def test_the_remote_declares_it_else_the_usual_names_else_head(self):
+        upstream = self.root / "upstream"
+        upstream.mkdir()
+        git(upstream, "init", "-q", "-b", "trunk")
+        write_tree(upstream, {"a.py": "x = 1\n"})
+        git(upstream, "add", ".")
+        git(upstream, "commit", "-qm", "base")
+        clone = self.root / "clone"
+        git(self.root, "clone", "-q", str(upstream), str(clone))
+        self.assertEqual(sincemod.default_since(clone), "origin/trunk")  # what the clone's origin/HEAD points at
+        git(clone, "remote", "set-head", "origin", "-d")
+        self.assertEqual(sincemod.default_since(clone), "HEAD")  # trunk is not a usual name, so only uncommitted work
+        git(clone, "branch", "main")
+        self.assertEqual(sincemod.default_since(clone), "main")
+        git(clone, "update-ref", "refs/remotes/origin/master", "HEAD")
+        self.assertEqual(sincemod.default_since(clone), "origin/master")  # a remote-tracking branch before a local one
+        self.assertEqual(sincemod.default_since(upstream), "HEAD")
+        self.assertEqual(sincemod.default_since(self.root), "HEAD")  # not a repository: resolving the base says so
+        with self.assertRaises(CheckError):
+            sincemod.check(self.root, config.load(self.root))
+
+    def test_the_commands_use_it(self):
+        upstream = self.root / "upstream"
+        upstream.mkdir()
+        git(upstream, "init", "-q", "-b", "main")
+        write_tree(upstream, {"a.py": "x = 1\n"})
+        git(upstream, "add", ".")
+        git(upstream, "commit", "-qm", "base")
+        clone = self.root / "clone"
+        git(self.root, "clone", "-q", str(upstream), str(clone))
+        git(clone, "checkout", "-qb", "feature")
+        write_tree(clone, {"b.py": "import a\n"})
+        git(clone, "add", ".")
+        git(clone, "commit", "-qm", "feat: b")
+        r = sincemod.check(clone, config.load(clone))
+        self.assertEqual((r["change"]["since"], r["change"]["uncommitted"], r["summary"]["added"]), ("origin/main", False, 1))
+        self.assertIn("`origin/main` (", sinceview.markdown(r))
+        code, out, _ = run_cli("brief", "--repo", str(clone), "--format", "json")
+        self.assertEqual((code, json.loads(out)["change"]["since"]), (0, "origin/main"))
+        code, out, _ = run_cli("check", "--repo", str(clone), "--since", "HEAD", "--format", "json")
+        self.assertEqual((code, json.loads(out)["summary"]["files"]), (0, 0))  # HEAD still means the uncommitted work alone
 
 
 if __name__ == "__main__":

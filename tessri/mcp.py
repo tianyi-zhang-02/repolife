@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence, TextIO
 
-from . import __version__, brief, config, gitlog, graphview, legacy, modules, since, sinceview
+from . import __version__, brief, config, gitlog, graphview, modules, since, sinceview
 from .analyze import Analysis, analyze
 from .explain import TargetError, explain, why_json
 from .gitlog import _git_line as git_line  # one-line probes, as the history reader runs them
@@ -42,7 +42,7 @@ VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
 SERVER_KEY = "io.modelcontextprotocol/serverInfo"
 TTL_MS = 3_600_000  # how long a client may cache `server/discover`; the tool list never changes while running
 REUSE_SECONDS = 3600  # how long an analysis of an unchanged checkout is reused: ages are day-granular, so an hour costs nothing
-CONFIG_FILES = (".tessri.toml", legacy.CONFIG_FILE, "pyproject.toml")  # what `config.load` reads; usually tracked, but stat'd regardless
+CONFIG_FILES = (".tessri.toml", "pyproject.toml")  # what `config.load` reads; usually tracked, but stat'd regardless
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
 UNSUPPORTED_VERSION = -32022
@@ -179,7 +179,7 @@ def _graph(server: Server, args: dict) -> tuple[str, dict]:
 def _triage(server: Server, args: dict) -> tuple[str, dict]:
     root, cfg = server.configured(args)
     try:
-        result = triage_compute(root, cfg, args.get("since", "HEAD"))
+        result = triage_compute(root, cfg, args.get("since"))
     except TriageError as exc:
         raise Mistake(str(exc)) from exc
     return triage_markdown(result, 20, cfg.active_days), result
@@ -188,7 +188,7 @@ def _triage(server: Server, args: dict) -> tuple[str, dict]:
 def _check(server: Server, args: dict) -> tuple[str, dict]:
     root, cfg = server.configured(args)
     try:
-        result = since.check(root, cfg, args.get("since", "HEAD"))
+        result = since.check(root, cfg, args.get("since"))
     except since.CheckError as exc:
         raise Mistake(str(exc)) from exc
     return sinceview.markdown(result, 20), result
@@ -197,13 +197,13 @@ def _check(server: Server, args: dict) -> tuple[str, dict]:
 def _brief(server: Server, args: dict) -> tuple[str, dict]:
     root, cfg = server.configured(args)
     try:
-        result = brief.compute(root, cfg, args.get("since", "HEAD"), ran=args.get("ran") or [])
+        result = brief.compute(root, cfg, args.get("since"), ran=args.get("ran") or [])
     except brief.BriefError as exc:
         raise Mistake(str(exc)) from exc
     return brief.markdown(result), result
 
 
-_SINCE = {"type": "string", "default": "HEAD", "description": "a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work (HEAD: only uncommitted work)"}
+_SINCE = {"type": "string", "description": "a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work. Absent: the default branch (origin/HEAD, else origin/main, origin/master, main or master; HEAD when none exists). HEAD: only uncommitted work"}
 
 TOOLS: tuple[Tool, ...] = (
     Tool("tessri_repos", "Repositories", "Which checkouts this server reads: each one's name, root and git state.", {}, (), _repos),
@@ -364,8 +364,6 @@ class Server:
             cfg = config.load(root)
         except config.ConfigError as exc:
             raise Mistake(str(exc)) from exc
-        for note in cfg.notes:
-            print(f"tessri: {note}", file=sys.stderr)
         return root, cfg
 
     def analysis(self, args: dict) -> tuple[Path, Analysis]:

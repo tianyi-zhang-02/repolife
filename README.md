@@ -14,11 +14,10 @@ Every claim can be traced to its evidence, and what the analysis cannot see it s
 ## Install
 
 ```bash
-pip install git+https://github.com/tianyi-zhang-02/tessri
+pip install tessri
 ```
 
-Python 3.11 or newer, no dependencies. To run it once without installing:
-`uvx --from git+https://github.com/tianyi-zhang-02/tessri tessri scan .`
+Python 3.11 or newer, no dependencies. To run it once without installing: `uvx tessri scan .`
 
 ## A complete example
 
@@ -28,19 +27,18 @@ What can a change to one file affect? On this repository:
 $ tessri impact tessri/graph.py
 Changing tessri/graph.py  (1 file, 110 code lines) can affect:
 
-- **13 code files** in **2 modules** (35.1% of the code), 1 of them directly (one followed edge away)
-- **19 test files** reaching it (candidates to run, not runs), 0 directly
-- code files by number of followed edges away: 1: 1, 2: 9, 3: 3
-- edges followed, any number of steps: recognized dependency syntax, package files, and 0 references found in strings, dynamic loading or unclassified evidence; syntax and package files alone reach 13 code files and 19 test files
+- **14 code files** in **1 module** (40.0% of the code), 1 of them directly (one followed edge away)
+- **20 test files** reaching it (candidates to run, not runs), 0 directly
+- code files by number of followed edges away: 1: 1, 2: 11, 3: 2
+- edges followed, any number of steps: recognized dependency syntax, package files, and 0 references found in strings, dynamic loading or unclassified evidence; syntax and package files alone reach 14 code files and 20 test files
 
 | Affected module | Files | Direct | Owners | State |
 |---|---:|---:|---|---|
-| `tessri` | 12 | 1 | Tianyi Zhang 100% | owned |
-| `repolife` | 1 | 0 | Tianyi Zhang 100% | owned |
+| `tessri` | 14 | 1 | Tianyi Zhang 100% | owned |
 
 People who maintain the affected code (tell them, or ask them to review): Tianyi Zhang 100%
 
-Tests that reach it, nearest first: `tests/test_htmlreport.py`, `tests/test_javascript.py`, `tests/test_markup.py`, `tests/test_meta.py`, `tests/test_modules.py`, `tests/test_moves.py`, `tests/test_ownership.py`, `tests/test_provenance.py`, `tests/test_renames.py`, `tests/test_resolve.py` and 9 more
+Tests that reach it, nearest first: `tests/test_htmlreport.py`, `tests/test_javascript.py`, `tests/test_markup.py`, `tests/test_meta.py`, `tests/test_modules.py`, `tests/test_moves.py`, `tests/test_ownership.py`, `tests/test_provenance.py`, `tests/test_renames.py`, `tests/test_resolve.py` and 10 more
 
 It depends on: `tessri` (2), `tessri/analyzers` (1)
 
@@ -60,10 +58,11 @@ real history, and the composite risk score we tried did not beat its parts, so t
 ## Getting started
 
 1. `tessri scan .` in any repository, or `tessri scan . --format html --out report.html` for one page to open.
-2. `tessri impact <path>` before a change, `tessri triage --since main` to review one, `tessri check --since main`
-   when it is done, and `tessri brief --since main` to hand it over on one page.
+2. `tessri impact <path>` before a change, `tessri triage` to review one, `tessri check` when it is done, and
+   `tessri brief` to hand it over on one page; without `--since`, a branch is judged against the default branch.
 3. `tessri integration install --agent claude` (or `codex`, `agents`, `copilot`) installs the agent's
-   instructions with a receipt, `--agent mcp` points a host at `tessri mcp`, the same questions as MCP tools;
+   instructions with a receipt, `--agent mcp` points a host at `tessri mcp`, the same questions as MCP tools,
+   `--agent config` writes a starter `.tessri.toml` and `--agent report` a weekly report workflow;
    `tessri integration remove` takes it all out again.
 
 ## Read more
@@ -74,8 +73,8 @@ real history, and the composite risk score we tried did not beat its parts, so t
   that speaks the protocol.
 - [Configuration](docs/guide/configuration.md), [JSON output](docs/guide/json.md),
   [Architecture](docs/guide/architecture.md), [Limits](docs/guide/limits.md).
-- [Changelog](CHANGELOG.md). Tessri was called repolife until 0.2.0; the old name
-  [keeps working through 0.2.x](docs/guide/formerly-repolife.md).
+- [Changelog](CHANGELOG.md). Tessri was called repolife until 0.2.0;
+  [what to rename](docs/guide/formerly-repolife.md) when upgrading from the old name.
 
 ## Development
 

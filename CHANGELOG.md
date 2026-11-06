@@ -2,7 +2,41 @@
 
 Dates are the day a version was tagged.
 
-## Unreleased
+## 0.3.0 (2026-11-06)
+
+**On PyPI.** `pip install tessri`, `uvx tessri scan .` and `pipx run tessri` install the real package, and so do
+the `command: tessri` of the MCP profiles, the `pip install tessri` of a Copilot setup step and of the report
+workflow.
+
+**The old name is gone**, as 0.2.0 announced: the `repolife` command and module, `.repolife.toml` and
+`[tool.repolife]`, the `repolife.analyzers` entry-point group, and the reading of a receipt, skill files and
+`AGENTS.md` markers that 0.1.x wrote. To upgrade: rename `.repolife.toml` to `.tessri.toml` and `[tool.repolife]`
+to `[tool.tessri]` (0.3.0 does not read the old names and does not notice them, where 0.2.x said so on every
+run); register analyzer plugins under `tessri.analyzers`; and move an integration that 0.1.x installed with
+`tessri integration update` on 0.2.x before upgrading, or delete its files by hand and install again.
+`import repolife` is an ImportError.
+
+Behaviour changes:
+
+- `triage`, `check` and `brief` without `--since` compare the branch with the default branch instead of looking at
+  the uncommitted work alone: the branch the remote declares (`origin/HEAD`), else the first of `origin/main`,
+  `origin/master`, `main` and `master` that exists, else `HEAD`. On the default branch itself the change is still
+  the uncommitted work, and `--since HEAD` keeps the old meaning everywhere. The ref chosen is `change.since` in
+  the output and in the first line of the page, so a reader sees which base the change was judged against. The
+  MCP `since` argument has the same default.
+- `--repo PATH` on every command. `scan`, `graph` and `integration` keep the positional root as the same thing,
+  and giving both with different values is an error.
+- `tessri init` is folded into `tessri integration`. `--agent config` seeds `.tessri.toml` with every option
+  commented out; the file is yours from the moment it is written, `update` never rewrites it, a deleted one is
+  forgotten rather than recreated, and `remove` deletes it only while it is untouched and otherwise just stops
+  recording it (a target of kind `seed` in the receipt; `manifest_version` stays 1). `--agent report` installs
+  the weekly scan workflow at `.github/workflows/tessri-report.yml`, managed like a skill, with
+  `pip install tessri` in place of `--install-spec`. The `.gitignore` line `init` added (`.tessri/`, a directory
+  nothing writes) is not carried over, and a workflow `init` wrote at `.github/workflows/tessri.yml` is an
+  unmanaged file to delete once `report` is installed.
+- The skill's note on roots says `--repo` first; `tessri --help` no longer mentions the former name.
+
+Also in this version, since 0.2.0:
 
 - `tessri brief --since <base>`: one page to hand a change over, with the sections the review-brief design asked for.
   It is triage and check from one pair of analyses (the base and the working tree, each analysed once, so the page

@@ -3,7 +3,7 @@
 Install Tessri, run one command in any repository, and build a single-file copy when installing is not an option.
 
 ```bash
-pip install git+https://github.com/tianyi-zhang-02/tessri   # or run once: uvx --from git+https://github.com/tianyi-zhang-02/tessri tessri scan .
+pip install tessri            # or run it once without installing: uvx tessri scan .
 tessri scan .                 # markdown report
 tessri scan . --format json   # machine-readable
 tessri scan . --format html --out report.html   # one page to open or share
@@ -14,6 +14,9 @@ tessri triage --since main    # the files of a change to look at first, and who 
 tessri check --since main     # what a change did to the structure, with an exit code for CI
 tessri brief --since main     # one page to hand the change over: both of the above, from one analysis, with what you ran
 ```
+
+Every command takes the repository root as `--repo PATH` (`scan` and `graph` also as their first argument). Without
+`--since`, a branch is judged against the default branch: the one the remote declares, else `main` or `master`.
 
 No install at all: build a single 300 KB file and drop it into any repository.
 

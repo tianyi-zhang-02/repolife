@@ -1,19 +1,19 @@
 # Formerly repolife
 
-Tessri was called repolife until 0.2.0. The old name keeps working through 0.2.x and goes away in 0.3.0:
+Tessri was called repolife until 0.2.0. The 0.2.x versions kept the old name working, with notices; 0.3.0 removed
+it, so upgrading from 0.1.x or 0.2.x means:
 
-- `repolife …` and `python -m repolife …` run the same program after a one-line notice on stderr, and
-  `import repolife` works with a `DeprecationWarning`.
-- `.repolife.toml` and `[tool.repolife]` are read when `.tessri.toml` and `[tool.tessri]` are absent, with a notice
-  on stderr; when both exist the new one is in force and the old one is ignored, also with a notice.
-- A receipt, skill files and AGENTS.md markers that 0.1.x installed are recognised by `tessri integration status`
-  under their recorded paths, and the next `install`, `update` or `remove` moves them: the skill file is created at
-  its new path and the old one removed in the same run, the AGENTS.md block is rewritten in place with the new
-  markers, and the receipt becomes `.tessri-integration.json` with the old file deleted. A user-modified old file is
-  a conflict, as always, and then nothing is written.
-- `tessri init` replaces an AGENTS.md block that `repolife init` wrote instead of adding a second one.
-- Analyzer plugins registered under the `repolife.analyzers` entry-point group keep loading.
+- Run `tessri` instead of `repolife`, and `python -m tessri` instead of `python -m repolife`; `import repolife` is
+  an ImportError.
+- Rename `.repolife.toml` to `.tessri.toml` and `[tool.repolife]` to `[tool.tessri]`. 0.3.0 does not read the old
+  names and does not notice them, so a stale old file is silently not in force, where 0.2.x said so on every run.
+- Register analyzer plugins under the `tessri.analyzers` entry-point group.
+- An integration that 0.1.x installed (a `.repolife-integration.json` receipt, `.claude/skills/repolife/SKILL.md` or
+  `.agents/skills/repolife/SKILL.md`, `<!-- repolife:begin -->` markers in `AGENTS.md`): run
+  `tessri integration update` on 0.2.x first, which moves it to the current names in one run, or delete those files
+  and the block by hand and run `tessri integration install` again. 0.3.0 does not read the old receipt, and
+  `tessri integration status` does not list the old paths.
 
-What changed for readers of the output is listed in [CHANGELOG.md](../../CHANGELOG.md): `tool.name` is `tessri` (the
-schema version is unchanged), SARIF rule ids are `tessri/<kind>` under the driver `tessri` with the base id
-`TESSRI_ROOT`, the scan heading is `# Tessri report`, and stderr lines start with `tessri:`.
+What changed for readers of the output in 0.2.0 is listed in [CHANGELOG.md](../../CHANGELOG.md): `tool.name` is
+`tessri` (the schema version is unchanged), SARIF rule ids are `tessri/<kind>` under the driver `tessri` with the
+base id `TESSRI_ROOT`, the scan heading is `# Tessri report`, and stderr lines start with `tessri:`.

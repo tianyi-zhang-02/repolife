@@ -1,8 +1,7 @@
 # Configuration
 
-`.tessri.toml` (or `[tool.tessri]` in `pyproject.toml`); every flag has a CLI equivalent. The old names,
-`.repolife.toml` and `[tool.repolife]`, are still read when the new ones are absent, with a notice on stderr
-([details](formerly-repolife.md)).
+`.tessri.toml` (or `[tool.tessri]` in `pyproject.toml`); every flag has a CLI equivalent.
+`tessri integration install --agent config` writes a `.tessri.toml` with every option commented out, to start from.
 
 ```toml
 active_days = 90

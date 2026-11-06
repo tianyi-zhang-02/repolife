@@ -29,7 +29,6 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from importlib import metadata
 
-from .. import legacy
 from typing import Callable, Mapping
 
 
@@ -92,14 +91,13 @@ def load_analyzers() -> list[Analyzer]:
 
     classes: list[type[Analyzer]] = [PythonAnalyzer, JavaScriptAnalyzer]
     try:
-        for group in ("tessri.analyzers", legacy.ENTRY_POINT_GROUP):
-            for ep in metadata.entry_points(group=group):
-                try:
-                    cls = ep.load()
-                except Exception:  # a broken third-party plugin must not break the scan
-                    continue
-                if isinstance(cls, type) and issubclass(cls, Analyzer) and cls not in classes:
-                    classes.append(cls)
+        for ep in metadata.entry_points(group="tessri.analyzers"):
+            try:
+                cls = ep.load()
+            except Exception:  # a broken third-party plugin must not break the scan
+                continue
+            if isinstance(cls, type) and issubclass(cls, Analyzer) and cls not in classes:
+                classes.append(cls)
     except Exception:
         pass
     return [cls() for cls in classes]

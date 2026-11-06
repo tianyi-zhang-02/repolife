@@ -307,7 +307,7 @@ def foot(depth: int) -> str:
         '<footer class="wrap foot">\n  <nav aria-label="Footer">'
         f'<a href="{up}guide/">Guide</a><a href="{up}guide/integration.html">Integration</a><a href="{up}guide/json.html">JSON</a>'
         f'<a href="{up}guide/limits.html">Limits</a><a href="{BLOB}CHANGELOG.md">Changelog</a><a href="{REPO}">GitHub</a></nav>\n'
-        f'  <span>MIT. Formerly repolife; the <a href="{up}guide/formerly-repolife.html">old name works through 0.2.x</a>.</span>\n</footer>\n'
+        f'  <span>MIT. <a href="{up}guide/formerly-repolife.html">Formerly repolife</a>, until 0.2.x.</span>\n</footer>\n'
     )
 
 

@@ -3,16 +3,17 @@ removed without touching anything the user wrote.
 
 The lifecycle keeps a receipt, `.tessri-integration.json`, at the project root: which profiles are installed,
 the hash of every file it wrote, the exact span it inserted into a shared `AGENTS.md`, the entry it added to a
-shared MCP configuration file, whether it created each file and which directories it made. Only what the receipt records is ever updated or removed. A file that is
-already there, even one byte-identical to the template, is a conflict and is left alone; so is a recorded file
-the user has edited. Every mutation is planned and checked in full before the first write, a dry run writes
-nothing, single files are replaced atomically and an ordinary failure is rolled back. This is not a cross-file
-transaction. `tessri init` (mount.py) is unchanged and leaves no receipt, so its files are never claimed.
+shared MCP configuration file, whether it created each file and which directories it made. Only what the receipt
+records is ever updated or removed. A file that is already there, even one byte-identical to the template, is a
+conflict and is left alone; so is a recorded file the user has edited. Every mutation is planned and checked in
+full before the first write, a dry run writes nothing, single files are replaced atomically and an ordinary failure
+is rolled back. This is not a cross-file transaction.
 
-A receipt, skill files and AGENTS.md markers written by an older version under the project's old name are read as
-they are (`status` reports them under their recorded paths) and moved to the current names by the next `install`,
-`update` or `remove`: the skill file is created at its new path and the old one removed in the same run, the span
-is rewritten with the current markers, and the receipt is written under its new name and the old file deleted.
+A profile is one of four kinds. `file`: the whole file is Tessri's (a skill, Copilot's instructions, the report
+workflow). `span`: one marked block inside a shared `AGENTS.md`. `key`: one entry in a shared JSON object. `seed`:
+a starting file that is the user's from the moment it is written (`.tessri.toml`): `update` never rewrites it,
+`remove` deletes it only while it is untouched and otherwise just stops recording it, and a deleted one is
+forgotten rather than recreated.
 """
 
 from __future__ import annotations
@@ -26,10 +27,11 @@ import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from . import __version__, legacy, templates
+from . import __version__, templates
 from .model import SCHEMA_VERSION
-from .mount import BEGIN, END
 
+BEGIN = "<!-- tessri:begin -->"
+END = "<!-- tessri:end -->"
 RECEIPT = ".tessri-integration.json"
 LOCK = ".tessri-integration.lock"
 MANIFEST_VERSION = 1
@@ -37,7 +39,6 @@ RESULT_VERSION = 1
 ACTIONS = ("create", "update", "remove", "unchanged", "forget")
 STATES = ("installed-current", "installed-outdated", "user-modified", "missing", "unmanaged", "symlink")
 _BEGIN, _END = BEGIN.encode("utf-8"), END.encode("utf-8")
-_MARKERS = ((_BEGIN, _END), (legacy.BEGIN.encode("utf-8"), legacy.END.encode("utf-8")))  # current first, then the old name's
 _HEX = re.compile(r"^[0-9a-f]{64}$")
 
 
@@ -45,11 +46,11 @@ _HEX = re.compile(r"^[0-9a-f]{64}$")
 class Profile:
     name: str
     path: str  # project-relative posix path; the fixed allowlist of what the lifecycle may touch
-    kind: str  # "file": the whole file is ours | "span": one marked span inside a shared file | "key": one entry in a shared JSON object
-    note: str  # what the user has to do for a running host to see the change
-    old_path: str | None = None  # where an older version installed this profile, when that differs; still recognised
-    body: str = "SKILL"  # the attribute of `templates` that is the file's text (file) or the entry's value (key)
+    kind: str  # "file": the whole file is ours | "span": one marked span inside a shared file | "key": one entry in a shared JSON object | "seed": a file that is the user's once written
+    note: str  # what happens next, once the files are written
+    body: str = "SKILL"  # the attribute of `templates` that is the file's text (file, seed) or the entry's value (key)
     key: tuple[str, str] | None = None  # kind key: the entry, as parent key and name (`mcpServers`, `tessri`)
+    host: bool = True  # the profile is read by an agent host, which the files being there does not prove has seen them
 
     def value(self) -> dict:
         """Kind key: the entry's value, as the template has it."""
@@ -63,18 +64,16 @@ class Profile:
             return _canon(self.value())
         return getattr(templates, self.body).encode("utf-8")
 
-    def paths(self) -> tuple[str, ...]:
-        """Every path a receipt may record for this profile: the current one and, if different, the old one."""
-        return (self.path, self.old_path) if self.old_path else (self.path,)
-
 
 PROFILES = {
-    "claude": Profile("claude", ".claude/skills/tessri/SKILL.md", "file", "start a new Claude Code session in this project so it discovers the skill", legacy.SKILL_PATHS["claude"]),
-    "codex": Profile("codex", ".agents/skills/tessri/SKILL.md", "file", "restart Codex in this project so it discovers the skill", legacy.SKILL_PATHS["codex"]),
+    "claude": Profile("claude", ".claude/skills/tessri/SKILL.md", "file", "start a new Claude Code session in this project so it discovers the skill"),
+    "codex": Profile("codex", ".agents/skills/tessri/SKILL.md", "file", "restart Codex in this project so it discovers the skill"),
     "agents": Profile("agents", "AGENTS.md", "span", "hosts that read AGENTS.md pick the block up on their next read"),
     "copilot": Profile("copilot", ".github/instructions/tessri.instructions.md", "file", "Copilot reads the file on its next request in this repository", body="COPILOT_INSTRUCTIONS"),
     "mcp": Profile("mcp", ".mcp.json", "key", "a host that reads .mcp.json starts the server on its next session, after asking you to approve the project's servers", body="MCP_SERVER", key=("mcpServers", "tessri")),
     "vscode": Profile("vscode", ".vscode/mcp.json", "key", "an editor that reads .vscode/mcp.json starts the server on its next agent request", body="VSCODE_SERVER", key=("servers", "tessri")),
+    "config": Profile("config", ".tessri.toml", "seed", "edit it; every option is optional, and the file is yours from now on (update leaves it alone, remove keeps it once edited)", body="CONFIG", host=False),
+    "report": Profile("report", ".github/workflows/tessri-report.yml", "file", "the workflow runs on its schedule once the file is on the default branch", body="REPORT_WORKFLOW", host=False),
 }
 
 # Who reads what: the profiles that carry a host's instructions and the one that points it at the server, in the
@@ -85,14 +84,6 @@ HOSTS = (
     ("Copilot coding agent", ("agents", "copilot"), None, "paste into the repository's settings, Copilot, Coding agent, MCP configuration: " + json.dumps(templates.COPILOT_AGENT_SERVERS) + "; put `pip install tessri` in copilot-setup-steps.yml"),
     ("editors reading .vscode/mcp.json", ("agents", "copilot", "claude", "codex"), "vscode", None),
 )
-
-
-def _markers_of(span: bytes) -> tuple[bytes, bytes]:
-    """The marker pair a span uses: the current one, or the one an older version wrote under the old name."""
-    for begin, end in _MARKERS:
-        if begin in span:
-            return begin, end
-    return _BEGIN, _END
 
 
 class IntegrationError(Exception):
@@ -202,8 +193,8 @@ class Target:
         if prof is None:
             raise IntegrationError(f"{name}: unknown profile {profile!r}")
         path = raw.get("path")
-        if path not in prof.paths() or raw.get("kind") != prof.kind:
-            raise IntegrationError(f"{name}: target of profile {profile} names {path!r} ({raw.get('kind')!r}); only {' or '.join(prof.paths())} ({prof.kind}) is allowed")
+        if path != prof.path or raw.get("kind") != prof.kind:
+            raise IntegrationError(f"{name}: target of profile {profile} names {path!r} ({raw.get('kind')!r}); only {prof.path} ({prof.kind}) is allowed")
         sha = raw.get("sha256")
         if not isinstance(sha, str) or not _HEX.match(sha):
             raise IntegrationError(f"{name}: target {path} has no valid sha256")
@@ -221,8 +212,7 @@ class Target:
             if not isinstance(span, str):
                 raise IntegrationError(f"{name}: target {path} records no span")
             data = span.encode("utf-8")
-            begin, end = _markers_of(data)
-            if data.count(begin) != 1 or data.count(end) != 1 or data.find(begin) > data.find(end):
+            if data.count(_BEGIN) != 1 or data.count(_END) != 1 or data.find(_BEGIN) > data.find(_END):
                 raise IntegrationError(f"{name}: the recorded span for {path} does not hold one marker pair")
             if _sha(data) != sha:
                 raise IntegrationError(f"{name}: the recorded span for {path} does not match its hash")
@@ -240,7 +230,6 @@ class Target:
 class Receipt:
     targets: list[Target]
     tool_version: str = __version__
-    path: str = RECEIPT  # the file it was read from: the current name, or the old one an older version wrote
 
     def get(self, profile: str) -> Target | None:
         return next((t for t in self.targets if t.profile == profile), None)
@@ -276,20 +265,16 @@ class Receipt:
             raise IntegrationError(f"{name}: a profile is recorded twice")
         tool = doc.get("tool")
         version = tool.get("version") if isinstance(tool, dict) and isinstance(tool.get("version"), str) else "unknown"
-        return cls(targets, version, name)
+        return cls(targets, version)
 
 
 def load_receipt(root: Path) -> Receipt | None:
-    """The receipt, None when there is none; a symlinked or malformed receipt is an error, never ignored. The file
-    under the current name wins; one left by an older version under the old name is read when there is no other."""
-    for name in (RECEIPT, legacy.RECEIPT):
-        path = root / name
-        if path.is_symlink():
-            raise IntegrationError(f"{name} is a symlink; refusing to read or write through it")
-        data = _read(path)
-        if data is not None:
-            return Receipt.from_bytes(data, name)
-    return None
+    """The receipt, None when there is none; a symlinked or malformed receipt is an error, never ignored."""
+    path = root / RECEIPT
+    if path.is_symlink():
+        raise IntegrationError(f"{RECEIPT} is a symlink; refusing to read or write through it")
+    data = _read(path)
+    return Receipt.from_bytes(data) if data is not None else None
 
 
 # --- spans in a shared file --------------------------------------------------------------------------------------
@@ -316,17 +301,15 @@ def _span_for(existing: bytes | None) -> bytes:
 
 
 def _refreshed_span(old: bytes) -> bytes:
-    """The recorded span with the current block text and markers, keeping its separators and line endings."""
-    begin, _ = _markers_of(old)
-    prefix = old[: old.index(begin)]
+    """The recorded span with the current block text, keeping its separators and line endings."""
+    prefix = old[: old.index(_BEGIN)]
     return prefix + _block(b"\r\n" if b"\r\n" in old else b"\n")
 
 
 def _span_state(data: bytes | None, span: bytes) -> str:
     if data is None:
         return "missing"
-    begin, end = _markers_of(span)
-    if data.count(span) == 1 and data.count(begin) == 1 and data.count(end) == 1:
+    if data.count(span) == 1 and data.count(_BEGIN) == 1 and data.count(_END) == 1:
         return "ok"
     return "modified"
 
@@ -369,7 +352,6 @@ class Plan:
     receipt_after: Receipt | None
     receipt_action: str
     snapshot: dict[str, bytes | None]  # what every involved path held when the plan was made
-    receipt_from: str = RECEIPT  # the receipt file that was read; the old name when an older version wrote it
 
 
 def _snapshot(root: Path, paths: list[str]) -> dict[str, bytes | None]:
@@ -385,7 +367,7 @@ def _select(receipt: Receipt | None, profiles: list[str] | None, op: str) -> lis
         return receipt.profiles()
     missing = [p for p in profiles if receipt.get(p) is None]
     if missing and op == "update":
-        raise IntegrationError(f"profile {', '.join(missing)} is not recorded in {receipt.path}; recorded: {', '.join(receipt.profiles()) or 'none'}")
+        raise IntegrationError(f"profile {', '.join(missing)} is not recorded in {RECEIPT}; recorded: {', '.join(receipt.profiles()) or 'none'}")
     return [p for p in PROFILES if p in profiles and p not in missing]  # removing what is not recorded is a no-op
 
 
@@ -437,45 +419,29 @@ def _remove_key(prof: Profile, old: Target, data: bytes) -> list[Step] | Conflic
 def _install_step(root: Path, prof: Profile, data: bytes | None) -> Step | Conflict:
     if prof.kind == "key":
         return _install_key(root, prof, data)
-    if prof.kind == "file":
+    if prof.kind in ("file", "seed"):
         if data is not None:
             return Conflict(prof.name, prof.path, "unmanaged", "a file already exists here and no receipt records it; Tessri does not claim files it did not install (move it away, or keep using it unmanaged)")
         content = prof.content()
         dirs = _missing_dirs(root, prof.path)
-        return Step(prof.name, prof.path, "file", "create", content, dirs=dirs, target=Target(prof.name, prof.path, "file", _sha(content), True, dirs))
+        return Step(prof.name, prof.path, prof.kind, "create", content, dirs=dirs, target=Target(prof.name, prof.path, prof.kind, _sha(content), True, dirs))
     if data is None:
         span = _span_for(None)
         return Step(prof.name, prof.path, "span", "create", span, target=Target(prof.name, prof.path, "span", _sha(span), True, [], span.decode("utf-8")))
-    if any(b in data or e in data for b, e in _MARKERS):
-        return Conflict(prof.name, prof.path, "markers", "AGENTS.md already carries Tessri markers (under the current or the old name) that no receipt installed (an `init` block, or another tool); remove them by hand or leave AGENTS.md unmanaged")
+    if _BEGIN in data or _END in data:
+        return Conflict(prof.name, prof.path, "markers", "AGENTS.md already carries Tessri markers that no receipt installed (another tool, or a block written by hand); remove them by hand or leave AGENTS.md unmanaged")
     span = _span_for(data)
     return Step(prof.name, prof.path, "span", "update", data + span, target=Target(prof.name, prof.path, "span", _sha(span), False, [], span.decode("utf-8")))
 
 
-def _move_step(root: Path, prof: Profile, old: Target, data: bytes | None, old_data: bytes | None) -> list[Step] | Conflict:
-    """A file target recorded under the old path: create it at the current path, then remove the old file, in that
-    order so that the directories the old install made and the new path still needs are never emptied in between.
-    Those directories stay recorded as made by the installer; only the old leaf directory is cleaned up."""
-    if data is not None:
-        return Conflict(prof.name, prof.path, "unmanaged", "a file already exists where the skill now lives and no receipt records it; Tessri does not claim files it did not install (move it away, or keep using it unmanaged)")
-    if old_data is not None and _sha(old_data) != old.sha256:
-        return Conflict(prof.name, old.path, "modified", "the file differs from what Tessri installed under its old name; it is yours now, so it is not moved or removed")
-    content = prof.content()
-    inherited = [d for d in old.dirs_created if prof.path.startswith(d + "/")]
-    dirs = sorted(set(inherited) | set(_missing_dirs(root, prof.path)), key=lambda d: d.count("/"))
-    create = Step(prof.name, prof.path, "file", "create", content, dirs=_missing_dirs(root, prof.path), target=Target(prof.name, prof.path, "file", _sha(content), True, dirs))
-    leaf = [d for d in old.dirs_created if d not in inherited]
-    if old_data is None:
-        return [create, Step(prof.name, old.path, "file", "forget", dirs=leaf)]
-    return [create, Step(prof.name, old.path, "file", "remove", delete=True, dirs=leaf)]
-
-
-def _update_step(root: Path, prof: Profile, old: Target, data: bytes | None, old_data: bytes | None) -> list[Step] | Conflict:
+def _update_step(root: Path, prof: Profile, old: Target, data: bytes | None) -> list[Step] | Conflict:
     if prof.kind == "key":
         return _update_key(root, prof, old, data)
+    if prof.kind == "seed":  # never rewritten; a deleted one was deleted on purpose
+        if data is None:
+            return [Step(prof.name, prof.path, "seed", "forget", dirs=list(old.dirs_created))]
+        return [Step(prof.name, prof.path, "seed", "unchanged", target=old)]
     if prof.kind == "file":
-        if old.path != prof.path:
-            return _move_step(root, prof, old, data, old_data)
         content = prof.content()
         if data is None:
             dirs = sorted(set(old.dirs_created) | set(_missing_dirs(root, prof.path)), key=lambda d: d.count("/"))
@@ -498,11 +464,14 @@ def _update_step(root: Path, prof: Profile, old: Target, data: bytes | None, old
 
 
 def _remove_step(prof: Profile, old: Target, data: bytes | None) -> list[Step] | Conflict:
-    """`data` is what the recorded path holds; for a target recorded under the old path that is the old file."""
     if data is None:
         return [Step(prof.name, old.path, prof.kind, "forget", dirs=list(old.dirs_created))]  # the dirs it made may still be empty
     if prof.kind == "key":
         return _remove_key(prof, old, data)
+    if prof.kind == "seed":
+        if _sha(data) != old.sha256:
+            return [Step(prof.name, old.path, "seed", "forget")]  # edited: the user's configuration stays, unrecorded
+        return [Step(prof.name, old.path, "seed", "remove", delete=True, dirs=list(old.dirs_created))]
     if prof.kind == "file":
         if _sha(data) != old.sha256:
             return Conflict(prof.name, old.path, "modified", "the file differs from what Tessri installed; it is yours now, so it is not removed (the receipt keeps recording it)")
@@ -532,11 +501,11 @@ def plan(root: Path, op: str, profiles: list[str] | None) -> Plan:
         selected = _select(receipt, profiles, op)
     # Links are refused before anything is read, so nothing outside the project is ever read, written or deleted.
     recorded = {p: receipt.get(p) for p in selected if receipt and receipt.get(p)}
-    involved = sorted({PROFILES[p].path for p in selected} | {t.path for t in recorded.values()})
+    involved = sorted(PROFILES[p].path for p in selected)
     linked = sorted({bad for bad in (_symlink_in(root, rel) for rel in involved) if bad})
     if linked:
         raise IntegrationError(f"{', '.join(linked)}: a symlink in the path of a managed target; Tessri does not read, write or delete through links")
-    snapshot = _snapshot(root, involved + [RECEIPT, legacy.RECEIPT])
+    snapshot = _snapshot(root, involved + [RECEIPT])
 
     steps: list[Step] = []
     conflicts: list[Conflict] = []
@@ -545,11 +514,11 @@ def plan(root: Path, op: str, profiles: list[str] | None) -> Plan:
         data = snapshot[prof.path]
         old = recorded.get(name)
         if op == "install":
-            out = _update_step(root, prof, old, data, snapshot[old.path]) if old else [_install_step(root, prof, data)]
+            out = _update_step(root, prof, old, data) if old else [_install_step(root, prof, data)]
         elif op == "update":
-            out = _update_step(root, prof, old, data, snapshot[old.path])  # type: ignore[union-attr]
+            out = _update_step(root, prof, old, data)  # type: ignore[arg-type]
         else:
-            out = _remove_step(prof, old, snapshot[old.path])  # type: ignore[union-attr]
+            out = _remove_step(prof, old, data)  # type: ignore[arg-type]
         if isinstance(out, Conflict):
             conflicts.append(out)
         else:
@@ -564,7 +533,7 @@ def plan(root: Path, op: str, profiles: list[str] | None) -> Plan:
         receipt_after = after
         before = snapshot[RECEIPT]
         action = "unchanged" if before == after.to_bytes() else ("update" if before is not None else "create")
-    return Plan(op, selected, steps, conflicts, receipt_after, action, snapshot, receipt.path if receipt else RECEIPT)
+    return Plan(op, selected, steps, conflicts, receipt_after, action, snapshot)
 
 
 # --- applying --------------------------------------------------------------------------------------------------
@@ -657,19 +626,15 @@ def _apply(root: Path, plan: Plan) -> None:
                 else:
                     _atomic_write(path, step.new or b"", mode)
                     undo.append(("restore", path, old, mode))
-        receipt, origin = root / RECEIPT, root / plan.receipt_from
+        receipt = root / RECEIPT
         if plan.receipt_action == "remove":
-            old = origin.read_bytes()
-            origin.unlink()
-            undo.append(("recreate", origin, old, None))
+            old = receipt.read_bytes()
+            receipt.unlink()
+            undo.append(("recreate", receipt, old, None))
         elif plan.receipt_action != "unchanged" and plan.receipt_after is not None:
             old = _read(receipt)
             _atomic_write(receipt, plan.receipt_after.to_bytes(), None)
             undo.append(("unlink", receipt) if old is None else ("restore", receipt, old, None))
-            if origin != receipt:  # written under the current name: the old file has nothing left to say
-                stale = origin.read_bytes()
-                origin.unlink()
-                undo.append(("recreate", origin, stale, None))
     except OSError as exc:
         failed = _rollback(undo)
         where = f"{exc.filename}: " if getattr(exc, "filename", None) else ""
@@ -743,7 +708,8 @@ def _result(root: Path, plan: Plan, dry_run: bool, applied: bool) -> dict:
     elif applied:  # only a profile whose files were written gets a note; a removal or a no-op speaks through its actions
         for name in plan.profiles:
             if any(s.profile == name and s.action in ("create", "update") for s in plan.steps):
-                notes.append(f"{name}: {PROFILES[name].note}; the files being there does not prove a running host has seen them.")
+                prof = PROFILES[name]
+                notes.append(f"{name}: {prof.note}" + ("; the files being there does not prove a running host has seen them." if prof.host else "."))
     return {
         "schema_version": SCHEMA_VERSION,
         "kind": f"integration-{plan.op}",
@@ -756,7 +722,7 @@ def _result(root: Path, plan: Plan, dry_run: bool, applied: bool) -> dict:
         "applied": applied,
         "actions": [s.row() for s in plan.steps],
         "conflicts": [c.row() for c in plan.conflicts],
-        "receipt": {"path": RECEIPT, "action": plan.receipt_action, **({"replaces": plan.receipt_from} if plan.receipt_from != RECEIPT else {})},
+        "receipt": {"path": RECEIPT, "action": plan.receipt_action},
         "notes": notes,
     }
 
@@ -771,27 +737,30 @@ def status(root: Path) -> dict:
     rows = []
     for name, prof in PROFILES.items():
         recorded = receipt.get(name) if receipt else None
-        if recorded is None:
-            for rel in prof.paths():
-                if _symlink_in(root, rel):
-                    if (root / rel).is_symlink():
-                        rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "symlink", "recorded": False})
-                    continue
-                data = _read(root / rel)
-                if data is None:
-                    continue
-                if prof.kind == "file" or (prof.kind == "span" and any(b in data or e in data for b, e in _MARKERS)) or (prof.kind == "key" and _entry(_load_object(data), prof.key) is not None):  # type: ignore[arg-type]
-                    rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "unmanaged", "recorded": False})
+        rel = prof.path
+        if recorded is None:  # a configuration file nobody installed is simply the user's, not an unmanaged target
+            if prof.kind == "seed":
+                continue
+            if _symlink_in(root, rel):
+                if (root / rel).is_symlink():
+                    rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "symlink", "recorded": False})
+                continue
+            data = _read(root / rel)
+            if data is None:
+                continue
+            if prof.kind == "file" or (prof.kind == "span" and (_BEGIN in data or _END in data)) or (prof.kind == "key" and _entry(_load_object(data), prof.key) is not None):  # type: ignore[arg-type]
+                rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "unmanaged", "recorded": False})
             continue
-        rel = recorded.path
         if _symlink_in(root, rel):
             rows.append({"profile": name, "path": rel, "kind": prof.kind, "state": "symlink", "recorded": True})
             continue
         data = _read(root / rel)
         if data is None:
             state = "missing"
+        elif prof.kind == "seed":
+            state = "installed-current"  # the seed has done its job: the file is there, and what it says is the user's
         elif prof.kind == "file":
-            state = "user-modified" if _sha(data) != recorded.sha256 else ("installed-current" if rel == prof.path and data == prof.content() else "installed-outdated")
+            state = "user-modified" if _sha(data) != recorded.sha256 else ("installed-current" if data == prof.content() else "installed-outdated")
         elif prof.kind == "key":
             current = _entry(_load_object(data), prof.key)  # type: ignore[arg-type]
             state = "user-modified" if current is None or _sha(_canon(current)) != recorded.sha256 else ("installed-current" if _canon(current) == prof.content() else "installed-outdated")
@@ -808,7 +777,7 @@ def status(root: Path) -> dict:
         "repo": {"name": root.name},
         "installed": receipt is not None,
         "installed_by": receipt.tool_version if receipt else None,
-        "receipt_path": receipt.path if receipt else None,
+        "receipt_path": RECEIPT if receipt else None,
         "profiles": receipt.profiles() if receipt else [],
         "targets": rows,
         "hosts": _hosts(rows),
@@ -844,7 +813,7 @@ def text(doc: dict) -> str:
         if not doc["installed"]:
             out.append(f"No Tessri integration receipt ({RECEIPT}) in this project.")
         else:
-            out.append(f"Receipt {doc.get('receipt_path', RECEIPT)}: profiles {', '.join(doc['profiles']) or 'none'}, installed by {doc['installed_by']}.")
+            out.append(f"Receipt {RECEIPT}: profiles {', '.join(doc['profiles']) or 'none'}, installed by {doc['installed_by']}.")
         for row in doc["targets"]:
             out.append(f"{row['state']:<18} {row['path']} ({row['profile']})")
         if not doc["targets"]:
@@ -862,8 +831,6 @@ def text(doc: dict) -> str:
     action = doc["receipt"]["action"]
     if action != "unchanged":
         out.append(f"{verb.get(action, action):<13} {RECEIPT}")
-        if doc["receipt"].get("replaces") and action != "remove":
-            out.append(f"{verb.get('remove', 'remove'):<13} {doc['receipt']['replaces']}")
     if not doc["actions"] and not doc["conflicts"]:
         out.append("Nothing to do.")
     out.extend(["", *doc["notes"]] if doc["notes"] else [])

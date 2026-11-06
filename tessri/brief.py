@@ -82,11 +82,14 @@ def uncommitted(root: Path) -> list[str]:
     return sorted(paths)
 
 
-def compute(root: Path, cfg: Config, since_ref: str = "HEAD", ran: Sequence[str] = (), now: float | None = None, limit: int = LISTED) -> dict:
-    """The brief of the change between `since_ref` and the working tree, as the JSON-ready dict the command prints:
-    its own sections for reading, and the whole triage and check objects under `triage` and `check`."""
+def compute(root: Path, cfg: Config, since_ref: str | None = None, ran: Sequence[str] = (), now: float | None = None, limit: int = LISTED) -> dict:
+    """The brief of the change between `since_ref` (`since.default_since` when None) and the working tree, as the
+    JSON-ready dict the command prints: its own sections for reading, and the whole triage and check objects under
+    `triage` and `check`."""
     root = Path(root).resolve()
     now = time.time() if now is None else now
+    if since_ref is None:
+        since_ref = since.default_since(root)
     try:
         base, head, prefix = since.resolve_base(root, since_ref)
         changed = since.changed_files(root, base)

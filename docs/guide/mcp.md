@@ -50,7 +50,7 @@ Arguments, with the command-line option each one is:
 | `level` (`graph`) | `"module"` or `"file"` | `"module"` | `--level`; at the file level the text is the JSON itself, since that picture has no Markdown form |
 | `module_depth` (`graph`) | integer from 1, or null | null (split by size) | `--module-depth` |
 | `include_tests` (`graph`) | boolean | false | `--include-tests` |
-| `since` (`triage`, `check`, `brief`) | string | `"HEAD"` | `--since`: a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work |
+| `since` (`triage`, `check`, `brief`) | string | the default branch: `origin/HEAD`, else `origin/main`, `origin/master`, `main` or `master`; `HEAD` when none exists | `--since`: a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work (`HEAD`: the uncommitted work alone) |
 | `ran` (`brief`) | array of strings | `[]` | `--ran`: the checks the host actually ran, one string each with the command, its result and exit code, recorded verbatim; without it the page says that none was recorded |
 | `full` (`scan`) | boolean | false | `--full`: the per-file table |
 

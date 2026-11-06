@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tessri"
-version = "0.2.0"
+version = "0.3.0"
 description = "Keep code understandable. How a codebase fits together, what a change can reach, who can review it and what nobody maintains, with the evidence for every claim. Zero dependencies."
 readme = "README.md"
 requires-python = ">=3.11"
@@ -27,7 +27,6 @@ Changelog = "https://github.com/tianyi-zhang-02/tessri/blob/main/CHANGELOG.md"
 
 [project.scripts]
 tessri = "tessri.cli:main"
-repolife = "tessri.cli:legacy_main"  # the old name, through 0.2.x
 
 [tool.setuptools.packages.find]
-include = ["tessri*", "repolife*"]  # repolife is the compatibility shim
+include = ["tessri*"]

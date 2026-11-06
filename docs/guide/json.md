@@ -28,7 +28,8 @@ Every JSON object also carries a `meta` block with the same names everywhere: `t
 (`name`, `root`), and `git` with `available`, `reason` (`null`, or `not-a-repository`, `no-commits`,
 `git-not-found`, `git-error`, `not-requested`), `head` (the checkout's HEAD, resolved on its own), `history_rev`
 (the commit history was read up to: HEAD for a scan, the base for `triage` and `check`), `shallow` and `commits`.
-All ids are full object ids. `triage`, `check` and `brief` add `meta.change` (`since`, `base`, `head`, `uncommitted`),
+All ids are full object ids. `triage`, `check` and `brief` add `meta.change` (`since`, as given or the default branch chosen
+when none was, `base`, `head`, `uncommitted`),
 and `check` and `brief` add `meta.analysis`, which says `skipped` with reason `no-code-changes` when nothing was compared, so an
 empty `findings` list is never mistaken for a clean comparison. The older top-level fields (`git` in a scan, the
 short `change.base` and `change.head` of `triage` and `check`) keep their meaning. A caught error (an unknown base,
