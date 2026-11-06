@@ -10,7 +10,11 @@ Dates are the day a version was tagged.
   `structuredContent` and its text as `content`, from one analysis. `--root` is repeatable, so one server serves
   several checkouts and a tool names one with `root`. A mistake in the arguments is a tool result in the sentence
   the command prints; a malformed request is a JSON-RPC error. Both the 2026-07-28 revision of the protocol
-  (`_meta` version, `server/discover`) and the earlier `initialize` handshake are spoken.
+  (`_meta` version, `server/discover`) and the earlier `initialize` handshake are spoken. An analysis is reused
+  across calls while the checkout's fingerprint holds (HEAD, the changed and untracked paths with their sizes and
+  modification times, the configuration files) and for at most an hour, so asking several questions about one
+  checkout costs one analysis (2.5 to 3 seconds on a 2,000-file repository, 30 to 85 ms to check the fingerprint);
+  `tessri_triage` and `tessri_check` always read afresh.
 - `tessri integration` gains three profiles: `mcp` (the `mcpServers.tessri` entry in `.mcp.json`), `vscode` (the
   `servers.tessri` entry in `.vscode/mcp.json`) and `copilot` (`.github/instructions/tessri.instructions.md`, the
   skill under Copilot's frontmatter). An entry profile records the entry, not the file: an existing file keeps its

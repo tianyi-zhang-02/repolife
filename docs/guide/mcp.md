@@ -12,8 +12,12 @@ tessri mcp --root ~/src/app --root ~/src/lib    # serves several checkouts; ever
 ```
 
 The server writes nothing to standard output but protocol messages, reports notices on standard error, and
-exits when its input closes. Every call reads the checkout as it is at that moment, uncommitted work included;
-nothing is cached between calls.
+exits when its input closes. Every call sees the checkout as it is, uncommitted work included: an analysis is
+reused for a later call only while the checkout's fingerprint is unchanged (HEAD, the paths git reports as changed
+or untracked with their sizes and modification times, and the configuration files) and for at most an hour, so a
+run of questions about one checkout costs one analysis. `meta.generated_at` is when that analysis was made.
+`tessri_triage` and `tessri_check` compare a change and always read afresh; a checkout that is not a git
+repository is analysed on every call.
 
 ## The tools
 

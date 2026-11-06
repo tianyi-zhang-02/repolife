@@ -13,6 +13,7 @@ import sys
 import tempfile
 import time
 import unittest
+import unittest.mock
 from pathlib import Path
 
 from helpers import TempRepo, git, write_tree
@@ -214,6 +215,76 @@ class ToolsTest(Repo):
                 self.assertIsNone(mcp.validate(tool, {**defaults, **{k: "x" for k in schema["required"]}}))
                 self.assertEqual(listing["annotations"], {"readOnlyHint": True, "destructiveHint": False, "idempotentHint": True, "openWorldHint": False})
                 self.assertTrue(listing["title"] and listing["description"].endswith("."))
+
+
+class ReuseTest(Repo):
+    """An analysis is reused while the checkout's fingerprint holds; any change to what the analysis reads, or an
+    hour, makes the next call read afresh."""
+
+    def setUp(self):
+        super().setUp()
+        self.calls = 0
+        real = mcp.analyze
+
+        def counted(*args, **kwargs):
+            self.calls += 1
+            return real(*args, **kwargs)
+
+        patcher = unittest.mock.patch.object(mcp, "analyze", counted)
+        patcher.start()
+        self.addCleanup(patcher.stop)
+
+    def ask(self, name="tessri_why", arguments=None):
+        if arguments is None:
+            arguments = {"path": "pkg/core.py"} if name == "tessri_why" else {}
+        return call(self.server, name, arguments)["result"]
+
+    def test_an_unchanged_checkout_is_analysed_once(self):
+        first = self.ask()
+        second = self.ask("tessri_impact", {"target": "pkg/util.py"})
+        third = self.ask("tessri_scan")
+        self.assertEqual(self.calls, 1)
+        self.assertEqual(first["structuredContent"]["meta"]["generated_at"], third["structuredContent"]["meta"]["generated_at"])
+        self.assertFalse(second["isError"])
+
+    def test_every_kind_of_change_is_seen(self):
+        self.ask()
+        write_tree(self.root, {"pkg/util.py": "x = 1\nz = 2\nimport pkg.dead\n"})  # a tracked, already dirty file edited again
+        self.assertEqual(self.calls, 1)
+        self.assertEqual(self.ask("tessri_why", {"path": "pkg/dead.py"})["structuredContent"]["graph"]["dependents"], ["pkg/util.py"])
+        self.assertEqual(self.calls, 2)
+        write_tree(self.root, {"pkg/fresh.py": "w = 1\n"})  # an untracked file appears
+        self.assertIn("pkg/fresh.py", self.ask("tessri_scan")["content"][0]["text"])
+        self.assertEqual(self.calls, 3)
+        git(self.root, "add", ".")
+        git(self.root, "commit", "-qm", "more", author=ALICE)  # HEAD moves, the tree is clean
+        self.ask()
+        self.assertEqual(self.calls, 4)
+        write_tree(self.root, {".tessri.toml": 'entry = ["scripts/run.py"]\nkeep = ["pkg/dead.py"]\n'})  # the configuration changes
+        self.assertIn("keep", self.ask("tessri_why", {"path": "pkg/dead.py"})["structuredContent"]["verdict"]["entry_points"])
+        self.assertEqual(self.calls, 5)
+        self.ask()
+        self.assertEqual(self.calls, 5)
+
+    def test_an_analysis_older_than_an_hour_is_not_reused(self):
+        self.ask()
+        self.server.clock = lambda: time.time() + mcp.REUSE_SECONDS + 1
+        self.ask()
+        self.assertEqual(self.calls, 2)
+
+    def test_a_change_query_always_reads_afresh(self):
+        self.ask("tessri_triage")
+        self.ask("tessri_check")
+        self.assertEqual(self.calls, 0)  # they analyse through their own path, which is not kept
+
+    def test_without_git_nothing_is_reused(self):
+        with tempfile.TemporaryDirectory() as tmp:  # its own directory: inside the fixture it would be part of that repository
+            plain = Path(tmp).resolve()
+            write_tree(plain, {"a.py": "x = 1\n"})
+            server = Server([plain])
+            call(server, "tessri_scan")
+            call(server, "tessri_scan")
+            self.assertEqual((self.calls, server.kept), (2, {}))
 
 
 class SeveralCheckoutsTest(TempRepo):
