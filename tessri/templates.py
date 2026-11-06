@@ -1,4 +1,4 @@
-"""Text written into a repository by `tessri init`. Kept as strings so the tool works from a zipapp too."""
+"""Text written into a repository by `tessri integration install`. Kept as strings so the tool works from a zipapp too."""
 
 CONFIG = """\
 # Tessri configuration. Every option is optional; see `tessri scan --help`.
@@ -71,8 +71,8 @@ project's policy, and do not install or download anything to make a routine quer
 Use `--format json` for structured query results; default text/Markdown is for reading. `scan` also supports
 `--format html --out report.html` for a self-contained overview with the module graph and an impact explorer.
 
-Select the intended repository root: `scan` and `graph` take a positional root; path/change queries use
-`--repo <root>`. Before combining saved reports, check `meta.repo`, `meta.git` and, for change queries,
+Select the intended repository root with `--repo <root>` (`scan` and `graph` also take it as their first
+argument). Before combining saved reports, check `meta.repo`, `meta.git` and, for change queries,
 `meta.change`: HEAD, the revision used for history and the comparison base can differ. Missing or skipped
 analysis is unavailable evidence, not an empty success.
 
@@ -120,7 +120,7 @@ can remain invisible under either policy.
 ## Triage a change
 
 ```bash
-tessri triage --since <base> --format json     # a branch against its base; without --since, uncommitted work
+tessri triage --since <base> --format json     # a branch against its base; without --since, against the default branch
 ```
 
 Run it before you open a change and before you review one. `files` is the changed code, most active first: files
@@ -136,7 +136,7 @@ prompt about where to look, not a verdict.
 ## Check a change's structure
 
 ```bash
-tessri check --since <base> --format json --fail-on never     # without --since, uncommitted work
+tessri check --since <base> --format json --fail-on never     # without --since, against the default branch
 ```
 
 Run it when a task is done and before the change is opened. It compares the base of the change with the working
@@ -257,13 +257,18 @@ VSCODE_SERVER = {"type": "stdio", "command": "tessri", "args": ["mcp"]}  # `.vsc
 COPILOT_AGENT_SERVERS = {"mcpServers": {"tessri": {"command": "tessri", "args": ["mcp"], "tools": ["*"]}}}
 CODEX_MCP_COMMAND = "codex mcp add tessri -- tessri mcp"  # Codex keeps MCP servers in the user's configuration, not the project's
 
-GITHUB_WORKFLOW = """\
-name: tessri
+REPORT_WORKFLOW = """\
+# Tessri's weekly report: the scan of the whole repository, as JSON and as one HTML page, kept as a workflow artifact
+# and summarised on the run. Installed by `tessri integration install --agent report`.
+name: tessri report
 
 on:
   workflow_dispatch:
   schedule:
     - cron: "0 6 * * 1"
+
+permissions:
+  contents: read
 
 jobs:
   report:
@@ -271,11 +276,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # activity needs full git history
+          fetch-depth: 0 # activity and ownership need the whole history
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install "__INSTALL_SPEC__"
+      - run: pip install tessri
       - name: Scan
         run: |
           tessri scan . --format json --out tessri-report.json

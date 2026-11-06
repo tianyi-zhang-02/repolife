@@ -1,4 +1,4 @@
-"""Command line entry point: `tessri scan | why | graph | impact | triage | check | brief | init | integration | mcp`."""
+"""Command line entry point: `tessri scan | why | graph | impact | triage | check | brief | integration | mcp`."""
 
 from __future__ import annotations
 
@@ -7,15 +7,29 @@ import json
 import sys
 from pathlib import Path
 
-from . import __version__, brief, config, graphview, htmlreport, integration, legacy, modules, sarifview, since, sinceview
+from . import __version__, brief, config, graphview, htmlreport, integration, modules, sarifview, since, sinceview
 from .analyze import analyze
 from .explain import TargetError, explain, why_json
 from .render import markdown
 from .report import build_report
 from .triage import TriageError, compute as triage_compute, markdown as triage_markdown
 
-# Not on PyPI yet: a bare `tessri` would install whatever package owns that name there.
-DEFAULT_INSTALL_SPEC = "git+https://github.com/tianyi-zhang-02/tessri"
+SINCE_HELP = "compare with the point where REF and HEAD part, plus uncommitted work (default: the default branch, origin/HEAD else origin/main, origin/master, main or master; HEAD means only uncommitted work)"
+
+
+def _add_root(p: argparse.ArgumentParser, positional: bool = False) -> None:
+    """`--repo PATH` on every command; `scan`, `graph` and `integration` also take the root as their first argument."""
+    if positional:
+        p.add_argument("path", nargs="?", metavar="PATH", help="repository root, the same as --repo (default: .)")
+    p.add_argument("--repo", metavar="PATH", help="repository root (default: .)")
+
+
+def _root_given(args: argparse.Namespace) -> str:
+    """The root the command line names, once: `--repo`, or the positional where there is one, or `.`."""
+    given = [p for p in (getattr(args, "path", None), args.repo) if p is not None]
+    if len(set(given)) > 1:
+        raise SystemExit(f"tessri: the root was given twice ({given[0]} and {given[1]}); give it once")
+    return given[0] if given else "."
 
 
 def _add_analysis_options(p: argparse.ArgumentParser) -> None:
@@ -47,8 +61,6 @@ def _non_negative(text: str) -> int:
 
 def _config_for(root: Path, args: argparse.Namespace) -> config.Config:
     cfg = config.load(root)
-    for note in cfg.notes:
-        print(f"tessri: {note}", file=sys.stderr)
     for key in ("active_days", "dormant_days", "owner_inactive_days", "review_days", "depth", "top"):
         value = getattr(args, key)
         if value is not None:
@@ -77,7 +89,7 @@ def _emit(text: str, out_path: str | None) -> None:
 
 
 def _cmd_scan(args: argparse.Namespace) -> int:
-    root = _root(args.path)
+    root = _root(_root_given(args))
     analysis = analyze(root, _config_for(root, args))
     report = build_report(analysis, full=args.full)
     if args.format == "json":
@@ -91,7 +103,7 @@ def _cmd_scan(args: argparse.Namespace) -> int:
 
 
 def _cmd_why(args: argparse.Namespace) -> int:
-    root = _root(args.repo)
+    root = _root(_root_given(args))
     analysis = analyze(root, _config_for(root, args))
     try:
         text = json.dumps(why_json(analysis, args.target), indent=2) + "\n" if args.format == "json" else explain(analysis, args.target) + "\n"
@@ -103,7 +115,7 @@ def _cmd_why(args: argparse.Namespace) -> int:
 
 
 def _cmd_graph(args: argparse.Namespace) -> int:
-    root = _root(args.path)
+    root = _root(_root_given(args))
     if args.level == "file" and args.format != "json":
         print("tessri: --level file is only available as --format json (a file-level picture is too large to read)", file=sys.stderr)
         return 2
@@ -121,7 +133,7 @@ def _cmd_graph(args: argparse.Namespace) -> int:
 
 
 def _cmd_triage(args: argparse.Namespace) -> int:
-    root = _root(args.repo)
+    root = _root(_root_given(args))
     cfg = _config_for(root, args)
     try:
         result = triage_compute(root, cfg, args.since)
@@ -133,7 +145,7 @@ def _cmd_triage(args: argparse.Namespace) -> int:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
-    root = _root(args.repo)
+    root = _root(_root_given(args))
     if args.locationless != "keep" and args.format != "sarif":
         print("tessri: --locationless applies to --format sarif only", file=sys.stderr)
         return 2
@@ -153,7 +165,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_brief(args: argparse.Namespace) -> int:
-    root = _root(args.repo)
+    root = _root(_root_given(args))
     cfg = _config_for(root, args)
     try:
         result = brief.compute(root, cfg, args.since, ran=args.ran, limit=args.limit)
@@ -165,7 +177,7 @@ def _cmd_brief(args: argparse.Namespace) -> int:
 
 
 def _cmd_impact(args: argparse.Namespace) -> int:
-    root = _root(args.repo)
+    root = _root(_root_given(args))
     analysis = analyze(root, _config_for(root, args))
     try:
         found = modules.impact(analysis, args.target, args.module_depth, hops=args.hops, edges=args.edges)
@@ -176,20 +188,6 @@ def _cmd_impact(args: argparse.Namespace) -> int:
     return 0
 
 
-def _cmd_init(args: argparse.Namespace) -> int:
-    from .mount import mount
-
-    root = _root(args.path)
-    agents = {"claude", "agents"} if args.agent == "all" else set() if args.agent == "none" else {args.agent}
-    actions = mount(root, agents=agents, ci=None if args.ci == "none" else args.ci, install_spec=args.install_spec, force=args.force, dry_run=args.dry_run)
-    dry = {"created": "would create", "updated": "would update", "skipped": "would skip"}
-    for act in actions:
-        verb = dry.get(act.verb, act.verb) if args.dry_run else act.verb
-        print(f"{verb:<13} {act.path}")
-    print("\nNext: run `tessri scan .` to see the first report." if not args.dry_run else "\nDry run: nothing was written.")
-    return 0
-
-
 def _cmd_mcp(args: argparse.Namespace) -> int:
     from .mcp import Server
 
@@ -197,9 +195,10 @@ def _cmd_mcp(args: argparse.Namespace) -> int:
 
 
 def _cmd_integration(args: argparse.Namespace) -> int:
-    root = Path(args.path).expanduser()
+    given = _root_given(args)
+    root = Path(given).expanduser()
     if not root.is_dir():
-        print(f"tessri: {args.path}: not a directory", file=sys.stderr)
+        print(f"tessri: {given}: not a directory", file=sys.stderr)
         return 2
     root = root.resolve()
     try:
@@ -212,12 +211,12 @@ def _cmd_integration(args: argparse.Namespace) -> int:
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="tessri", description=f"Tessri ({legacy.FORMERLY}): keep code understandable. How a codebase fits together, what a change can reach, who is able to review it and what nobody maintains, from code and git history, with the evidence for every claim.")
+    parser = argparse.ArgumentParser(prog="tessri", description="Tessri: keep code understandable. How a codebase fits together, what a change can reach, who is able to review it and what nobody maintains, from code and git history, with the evidence for every claim.")
     parser.add_argument("--version", action="version", version=f"tessri {__version__}")
     sub = parser.add_subparsers(dest="cmd", required=True)
 
     scan = sub.add_parser("scan", help="analyse a repository and print the report")
-    scan.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
+    _add_root(scan, positional=True)
     scan.add_argument("--format", choices=("md", "json", "html"), default="md", help="html: one self-contained page with the module graph and an impact explorer")
     scan.add_argument("--out", metavar="FILE", help="write the report to FILE instead of stdout")
     scan.add_argument("--full", action="store_true", help="json: include the per-file table")
@@ -227,14 +226,14 @@ def build_parser() -> argparse.ArgumentParser:
 
     why = sub.add_parser("why", help="show the evidence behind one file's verdict")
     why.add_argument("target", help="file path, or dotted module name")
-    why.add_argument("--repo", default=".", help="repository root (default: .)")
+    _add_root(why)
     why.add_argument("--format", choices=("text", "json"), default="text", help="json: the same facts as data, with the analysis metadata")
     why.add_argument("--out", help="write to this file instead of stdout")
     _add_analysis_options(why)
     why.set_defaults(func=_cmd_why)
 
     graph = sub.add_parser("graph", help="module dependency graph: who imports whom, cycles, owners")
-    graph.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
+    _add_root(graph, positional=True)
     graph.add_argument("--format", choices=("md", "json", "mermaid", "dot"), default="md")
     graph.add_argument("--level", choices=("module", "file"), default="module", help="file: every import as a pair, json only (default: module)")
     graph.add_argument("--module-depth", type=_positive, metavar="N", help="a module is the first N directories of a path (default: split by size)")
@@ -247,7 +246,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     impact = sub.add_parser("impact", help="what a change to one file or directory can reach: dependents, tests, owners")
     impact.add_argument("target", help="file path, directory, or dotted package name")
-    impact.add_argument("--repo", default=".", help="repository root (default: .)")
+    _add_root(impact)
     impact.add_argument("--format", choices=("text", "json"), default="text")
     impact.add_argument("--hops", type=_positive, metavar="N", help="follow edges at most N steps away (default: all of them)")
     impact.add_argument("--edges", choices=("all", "imports"), default="all", help="which evidence to follow: all = recognized dependency syntax, package files and references found in strings or dynamic loading (default); imports = recognized dependency syntax and package files only")
@@ -257,8 +256,8 @@ def build_parser() -> argparse.ArgumentParser:
     impact.set_defaults(func=_cmd_impact)
 
     triage = sub.add_parser("triage", help="which files of a change deserve a human first, what it can ripple into, who can look")
-    triage.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
-    triage.add_argument("--repo", default=".", help="repository root (default: .)")
+    triage.add_argument("--since", metavar="REF", help=SINCE_HELP)
+    _add_root(triage)
     triage.add_argument("--format", choices=("md", "json"), default="md")
     triage.add_argument("--limit", type=int, default=20, metavar="N", help="md: files listed (default 20)")
     triage.add_argument("--out", metavar="FILE", help="write the result to FILE instead of stdout")
@@ -266,8 +265,8 @@ def build_parser() -> argparse.ArgumentParser:
     triage.set_defaults(func=_cmd_triage)
 
     check = sub.add_parser("check", help="what a change did to the structure: new orphans and cycles, imports of deleted files, changed code nobody maintains")
-    check.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
-    check.add_argument("--repo", default=".", help="repository root (default: .)")
+    check.add_argument("--since", metavar="REF", help=SINCE_HELP)
+    _add_root(check)
     check.add_argument("--format", choices=("md", "json", "sarif"), default="md", help="sarif: the same findings as a SARIF 2.1.0 log, one result per finding, file-level locations")
     check.add_argument("--limit", type=int, default=20, metavar="N", help="md: rows per table (default 20)")
     check.add_argument("--fail-on", choices=("never", "warn", "block"), default="never", help="exit 1 when a finding is at least this serious: block = deleted files still imported, warn = also new orphans, cycles and unowned code (default: never)")
@@ -277,8 +276,8 @@ def build_parser() -> argparse.ArgumentParser:
     check.set_defaults(func=_cmd_check)
 
     briefp = sub.add_parser("brief", help="one page to hand a change over: triage and check from one analysis, the commits and uncommitted files in scope, candidate tests apart from the checks the host ran, and what needs a person")
-    briefp.add_argument("--since", default="HEAD", metavar="REF", help="compare with the point where REF and HEAD part, plus uncommitted work (default: HEAD, i.e. only uncommitted work)")
-    briefp.add_argument("--repo", default=".", help="repository root (default: .)")
+    briefp.add_argument("--since", metavar="REF", help=SINCE_HELP)
+    _add_root(briefp)
     briefp.add_argument("--format", choices=("md", "json"), default="md", help="json: the brief's sections plus the whole triage and check objects")
     briefp.add_argument("--limit", type=int, default=brief.LISTED, metavar="N", help=f"files in the look-first table (default {brief.LISTED}); the JSON always carries them all")
     briefp.add_argument("--ran", action="append", default=[], metavar="TEXT", help="a check the host actually ran, with its result and exit code, recorded verbatim (repeatable); without it the brief says that none was recorded")
@@ -286,20 +285,11 @@ def build_parser() -> argparse.ArgumentParser:
     _add_analysis_options(briefp)
     briefp.set_defaults(func=_cmd_brief)
 
-    init = sub.add_parser("init", help="mount Tessri into a repository: config, agent skill, AGENTS.md block, optional CI")
-    init.add_argument("path", nargs="?", default=".", help="repository root (default: .)")
-    init.add_argument("--agent", choices=("claude", "agents", "all", "none"), default="all", help="which agent integrations to write (default: all)")
-    init.add_argument("--ci", choices=("none", "github"), default="none", help="also write a CI workflow (default: none)")
-    init.add_argument("--install-spec", default=DEFAULT_INSTALL_SPEC, metavar="SPEC", help=f"what `pip install` should receive in generated files (default: {DEFAULT_INSTALL_SPEC})")
-    init.add_argument("--force", action="store_true", help="overwrite files Tessri would otherwise leave alone")
-    init.add_argument("--dry-run", action="store_true", help="show what would change without writing")
-    init.set_defaults(func=_cmd_init)
-
     mcp = sub.add_parser("mcp", help="serve the questions as Model Context Protocol tools over stdin/stdout, for an agent that starts it as a subprocess")
     mcp.add_argument("--root", action="append", metavar="PATH", help="a checkout to serve (repeatable; default: the current directory); with several, every tool names one with `root`")
     mcp.set_defaults(func=_cmd_mcp)
 
-    integ = sub.add_parser("integration", help="install, update, inspect or remove the project integration (agent skills, AGENTS.md block, MCP configuration) with a receipt, reversibly")
+    integ = sub.add_parser("integration", help="install, update, inspect or remove the project integration (agent skills, AGENTS.md block, MCP configuration, a starter configuration file, a report workflow) with a receipt, reversibly")
     ops = integ.add_subparsers(dest="op", required=True, metavar="{install,update,status,remove}")
     for op, text in (
         ("install", "write the skill or block for each --agent and record a receipt; an existing file is a conflict, never claimed"),
@@ -308,19 +298,13 @@ def build_parser() -> argparse.ArgumentParser:
         ("remove", "remove recorded files and blocks that are still as installed, and the receipt when nothing remains"),
     ):
         p = ops.add_parser(op, help=text)
-        p.add_argument("path", nargs="?", default=".", help="project root (default: .)")
+        _add_root(p, positional=True)
         p.add_argument("--format", choices=("text", "json"), default="text")
         if op != "status":
-            p.add_argument("--agent", action="append", choices=tuple(integration.PROFILES), metavar="{" + ",".join(integration.PROFILES) + "}", help="profile to act on, repeatable; install needs at least one, update and remove default to every recorded profile")
+            p.add_argument("--agent", action="append", choices=tuple(integration.PROFILES), metavar="{" + ",".join(integration.PROFILES) + "}", help="profile to act on, repeatable (an agent's instructions, a host's server entry, `config` for a starter .tessri.toml, `report` for a weekly scan workflow); install needs at least one, update and remove default to every recorded profile")
             p.add_argument("--dry-run", action="store_true", help="show the plan without writing anything")
         p.set_defaults(func=_cmd_integration)
     return parser
-
-
-def legacy_main(argv: list[str] | None = None) -> int:
-    """The program under its old name (the old command, or `python -m` with the old module): the same thing, after a notice."""
-    print(f"tessri: {legacy.NOTICE}", file=sys.stderr)
-    return main(argv)
 
 
 def main(argv: list[str] | None = None) -> int:

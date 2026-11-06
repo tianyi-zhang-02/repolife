@@ -1,13 +1,10 @@
-"""Configuration: `.tessri.toml`, or `[tool.tessri]` in pyproject.toml. CLI flags extend or override. The old names
-(see `legacy`) are still read when the new ones are absent; `Config.notes` says when that happened."""
+"""Configuration: `.tessri.toml`, or `[tool.tessri]` in pyproject.toml. CLI flags extend or override."""
 
 from __future__ import annotations
 
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
-
-from . import legacy
 
 _INT_KEYS = ("active_days", "dormant_days", "owner_inactive_days", "review_days", "depth", "top")
 _LIST_KEYS = ("keep", "exclude", "entry", "ignore_authors")
@@ -29,7 +26,6 @@ class Config:
     exclude: list[str] = field(default_factory=list)  # globs skipped entirely
     entry: list[str] = field(default_factory=list)  # extra entry points: module names or paths
     ignore_authors: list[str] = field(default_factory=list)  # globs on commit author name or email that never own code (bots are ignored already)
-    notes: list[str] = field(default_factory=list)  # how the configuration was assembled, when a caller should know (an old file name was read, or ignored)
 
 
 def _read(path: Path) -> dict:
@@ -54,26 +50,14 @@ def _apply(cfg: Config, data: dict, origin: str) -> None:
 
 
 def load(root: Path) -> Config:
-    """pyproject.toml first, then the dotfile on top. Under each, the new name wins; the old one is read only when the
-    new is absent, and either way a note records what happened, so that a stale old file is never silently in force."""
+    """pyproject.toml first, then the dotfile on top."""
     cfg = Config()
     pyproject = root / "pyproject.toml"
     if pyproject.is_file():
-        tool = _read(pyproject).get("tool", {})
-        section, old = tool.get("tessri"), tool.get(legacy.CONFIG_SECTION)
+        section = _read(pyproject).get("tool", {}).get("tessri")
         if section:
             _apply(cfg, section, f"{pyproject.name} [tool.tessri]")
-            if old:
-                cfg.notes.append(f"{pyproject.name}: [tool.{legacy.CONFIG_SECTION}] ignored because [tool.tessri] exists")
-        elif old:
-            _apply(cfg, old, f"{pyproject.name} [tool.{legacy.CONFIG_SECTION}]")
-            cfg.notes.append(f"{pyproject.name}: read [tool.{legacy.CONFIG_SECTION}]; rename the section to [tool.tessri] (the old name is read through 0.2.x)")
-    dotfile, old_dotfile = root / ".tessri.toml", root / legacy.CONFIG_FILE
+    dotfile = root / ".tessri.toml"
     if dotfile.is_file():
         _apply(cfg, _read(dotfile), dotfile.name)
-        if old_dotfile.is_file():
-            cfg.notes.append(f"{old_dotfile.name} ignored because {dotfile.name} exists")
-    elif old_dotfile.is_file():
-        _apply(cfg, _read(old_dotfile), old_dotfile.name)
-        cfg.notes.append(f"read {old_dotfile.name}; rename it to {dotfile.name} (the old name is read through 0.2.x)")
     return cfg

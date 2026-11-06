@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from . import __version__, gitlog, inventory, meta
+from . import since as since_mod
 from .analyze import Analysis, analyze
 from .config import Config
 from .model import SCHEMA_VERSION
@@ -46,17 +47,10 @@ def _git(root: Path, *args: str, check: bool = True) -> str:
 
 def resolve_base(root: Path, since: str) -> tuple[str, str]:
     """(commit to compare with, HEAD): the point where `since` and HEAD part, as a pull request would be judged."""
-    if _git(root, "rev-parse", "--is-inside-work-tree", check=False).strip() != "true":
-        raise TriageError("triage needs a git repository")
-    found = _git(root, "rev-parse", "--verify", "--quiet", f"{since}^{{commit}}", check=False).strip()
-    if not found:
-        raise TriageError(f"`{since}` is not a commit, branch or tag in this repository")
-    head = _git(root, "rev-parse", "--verify", "--quiet", "HEAD^{commit}", check=False).strip()
-    if not head:
-        raise TriageError("this repository has no commits yet")
-    base = _git(root, "merge-base", found, head, check=False).strip()
-    if not base:
-        raise TriageError(f"`{since}` and HEAD share no history")
+    try:
+        base, head, _prefix = since_mod.resolve_base(root, since)
+    except since_mod.CheckError as exc:
+        raise TriageError(str(exc).replace("check needs", "triage needs", 1)) from exc
     return base, head
 
 
@@ -113,11 +107,14 @@ def _reach(rev: dict[str, set[str]], start: str, hops: int) -> dict[str, int]:
     return seen
 
 
-def compute(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None, analysis: Analysis | None = None) -> dict:
-    """The triage of the change between `since` and the working tree, as the JSON-ready dict the commands print.
-    `analysis` is the working tree analysed with history read up to the base and review load off, when the caller
-    has made it already (`brief` makes one for triage and check); otherwise it is made here."""
+def compute(root: Path, cfg: Config, since: str | None = None, now: float | None = None, analysis: Analysis | None = None) -> dict:
+    """The triage of the change between `since` (`since.default_since` when None) and the working tree, as the
+    JSON-ready dict the commands print. `analysis` is the working tree analysed with history read up to the base and
+    review load off, when the caller has made it already (`brief` makes one for triage and check); otherwise it is
+    made here."""
     root = Path(root).resolve()
+    if since is None:
+        since = since_mod.default_since(root)
     base, head = resolve_base(root, since)
     diff = _diff(root, base)
     dirty = bool(_git(root, "status", "--porcelain", "--untracked-files=normal").strip())

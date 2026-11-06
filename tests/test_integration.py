@@ -13,8 +13,7 @@ from helpers import TempRepo, write_tree
 
 from tessri import integration, templates
 from tessri.cli import main
-from tessri.integration import LOCK, PROFILES, RECEIPT, IntegrationError, run, status
-from tessri.mount import BEGIN, END, mount
+from tessri.integration import BEGIN, END, LOCK, PROFILES, RECEIPT, IntegrationError, run, status
 
 PROJECT = {"src/app.py": "import src.lib\n", "src/lib.py": "x = 1\n", "README.md": "# demo\n", ".gitignore": "dist/\n"}
 SKILL = ".claude/skills/tessri/SKILL.md"
@@ -112,8 +111,8 @@ class InstallTest(Project):
         self.assertEqual((doc["applied"], tree(self.root)), (False, before))
         self.assertFalse((self.root / RECEIPT).exists())
 
-    def test_legacy_init_block_is_a_conflict(self):
-        mount(self.root, {"agents"}, None, "tessri")
+    def test_a_block_under_our_markers_that_no_receipt_installed_is_a_conflict(self):
+        write_tree(self.root, {"AGENTS.md": f"# demo\n\n{BEGIN}\nwritten by hand\n{END}\n"})
         before = tree(self.root)
         doc = run(self.root, "install", ["agents"])
         self.assertEqual(self.conflicts(doc), {"agents": "markers"})
@@ -333,7 +332,7 @@ class RemoveTest(Project):
         self.assertEqual((self.root / "AGENTS.md").read_bytes(), b"")
 
     def test_remove_without_a_receipt_is_a_no_op(self):
-        mount(self.root, {"claude", "agents"}, None, "tessri")  # legacy init: familiar files, no receipt
+        write_tree(self.root, {SKILL: templates.SKILL, "AGENTS.md": f"{BEGIN}\n{templates.AGENTS_BLOCK}{END}\n"})  # familiar files, no receipt
         before = tree(self.root)
         for profiles in (None, ["claude"]):
             doc = run(self.root, "remove", profiles)
@@ -352,8 +351,8 @@ class StatusTest(Project):
         self.assertEqual(code, 0)
         self.assertIn("No Tessri integration receipt", out)
 
-    def test_legacy_files_are_unmanaged(self):
-        mount(self.root, {"claude", "agents"}, None, "tessri")
+    def test_files_at_the_profiles_paths_that_no_receipt_records_are_unmanaged(self):
+        write_tree(self.root, {SKILL: templates.SKILL, "AGENTS.md": f"{BEGIN}\n{templates.AGENTS_BLOCK}{END}\n", ".tessri.toml": "active_days = 7\n"})
         doc = status(self.root)
         self.assertEqual(doc["installed"], False)
         self.assertEqual({r["profile"]: r["state"] for r in doc["targets"]}, {"claude": "unmanaged", "agents": "unmanaged"})
@@ -501,7 +500,7 @@ class RollbackTest(Project):
 
 class CliTextTest(Project):
     def test_dry_run_text(self):
-        code, out, _ = run_cli("integration", "install", str(self.root), "--agent", "claude", "--dry-run")
+        code, out, _ = run_cli("integration", "install", "--repo", str(self.root), "--agent", "claude", "--dry-run")
         self.assertEqual(code, 0)
         self.assertIn("would create  .claude/skills/tessri/SKILL.md (claude)", out)
         self.assertIn(f"would create  {RECEIPT}", out)
@@ -529,6 +528,77 @@ class CliTextTest(Project):
         self.assertNotIn("--fail-on block     #", templates.SKILL)  # the routine example does not gate
         self.assertIn("do not start every task with a full scan", templates.SKILL)
         self.assertLess(templates.SKILL.index("tessri impact <path>"), templates.SKILL.index("## Run it"))
+
+
+class SeedAndReportTest(Project):
+    """`config` seeds `.tessri.toml`, which is the user's from the moment it is written; `report` is a managed
+    workflow file like a skill."""
+
+    CONFIG = ".tessri.toml"
+    WORKFLOW = ".github/workflows/tessri-report.yml"
+
+    def states(self) -> dict[str, str]:
+        return {r["profile"]: r["state"] for r in status(self.root)["targets"]}
+
+    def test_install_writes_the_starter_configuration_and_the_workflow(self):
+        doc = run(self.root, "install", ["config", "report"])
+        self.assertTrue(doc["applied"])
+        self.assertEqual(self.actions(doc), {"config": "create", "report": "create"})
+        self.assertEqual((self.root / self.CONFIG).read_text(), templates.CONFIG)
+        workflow = (self.root / self.WORKFLOW).read_text()
+        self.assertEqual(workflow, templates.REPORT_WORKFLOW)
+        self.assertIn("pip install tessri\n", workflow)
+        self.assertEqual({t["profile"]: t["kind"] for t in self.receipt()["targets"]}, {"config": "seed", "report": "file"})
+        self.assertEqual(len(doc["notes"]), 2)
+        for note in doc["notes"]:
+            self.assertNotIn("running host", note)  # neither is read by an agent
+        self.assertEqual(self.states(), {"config": "installed-current", "report": "installed-current"})
+        code, out, _ = run_cli("scan", str(self.root), "--format", "json")  # the seeded configuration is read like any other
+        self.assertEqual((code, json.loads(out)["settings"]["active_days"]), (0, 90))
+
+    def test_an_existing_configuration_is_a_conflict(self):
+        write_tree(self.root, {self.CONFIG: "active_days = 7\n"})
+        doc = run(self.root, "install", ["config"])
+        self.assertEqual((self.conflicts(doc), doc["applied"]), ({"config": "unmanaged"}, False))
+        self.assertFalse((self.root / RECEIPT).exists())
+
+    def test_an_edited_configuration_is_yours(self):
+        run(self.root, "install", ["config", "claude"])
+        (self.root / self.CONFIG).write_text("active_days = 7\n")
+        self.assertEqual(self.states()["config"], "installed-current")  # the seed has done its job
+        doc = run(self.root, "update", None)
+        self.assertEqual((self.actions(doc), doc["applied"]), ({"config": "unchanged", "claude": "unchanged"}, True))
+        self.assertEqual((self.root / self.CONFIG).read_text(), "active_days = 7\n")
+        doc = run(self.root, "remove", None)
+        self.assertEqual((self.actions(doc), doc["applied"]), ({"config": "forget", "claude": "remove"}, True))
+        self.assertEqual((self.root / self.CONFIG).read_text(), "active_days = 7\n")
+        self.assertFalse((self.root / RECEIPT).exists())
+        self.assertEqual(status(self.root)["targets"], [])  # the user's configuration is not an unmanaged target
+
+    def test_an_untouched_configuration_is_removed_and_a_deleted_one_forgotten(self):
+        run(self.root, "install", ["config"])
+        doc = run(self.root, "remove", None)
+        self.assertEqual(self.actions(doc), {"config": "remove"})
+        self.assertFalse((self.root / self.CONFIG).exists())
+        run(self.root, "install", ["config"])
+        (self.root / self.CONFIG).unlink()
+        self.assertEqual(self.states(), {"config": "missing"})
+        doc = run(self.root, "update", None)
+        self.assertEqual(self.actions(doc), {"config": "forget"})
+        self.assertFalse((self.root / self.CONFIG).exists())
+        self.assertFalse((self.root / RECEIPT).exists())
+
+    def test_the_workflow_is_managed_like_a_skill(self):
+        run(self.root, "install", ["report"])
+        path = self.root / self.WORKFLOW
+        path.write_text("edited\n")
+        self.assertEqual(self.states(), {"report": "user-modified"})
+        doc = run(self.root, "update", None)
+        self.assertEqual((self.conflicts(doc), doc["applied"]), ({"report": "modified"}, False))
+        path.write_text(templates.REPORT_WORKFLOW)
+        doc = run(self.root, "remove", None)
+        self.assertEqual(self.actions(doc), {"report": "remove"})
+        self.assertFalse((self.root / ".github").exists())
 
 
 if __name__ == "__main__":

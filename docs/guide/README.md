@@ -14,14 +14,15 @@ faster than anyone can read it. One page per question, each with real output and
 - [Hand a change over: the review brief](brief.md): triage and check on one page, from one analysis, with the
   state the evidence describes and what the host ran kept apart from candidate tests.
 - [The HTML report](html-report.md): one offline page with the explorer.
-- [Integration: skills, AGENTS.md, CI](integration.md): the receipt-managed install, and the older `init`.
+- [Integration: skills, AGENTS.md, MCP, configuration, CI](integration.md): every profile installed with a receipt, and
+  taken out again.
 - [MCP: Tessri as tools](mcp.md): `tessri mcp`, the eight tools, their arguments and errors, and the profiles that
   point each agent at the server.
 - [Configuration](configuration.md): `.tessri.toml` and `[tool.tessri]`.
 - [JSON output](json.md): the objects, `schema_version` and the `meta` block.
 - [Architecture](architecture.md): the pipeline, one view per command, and how to add a language.
 - [Limits](limits.md): what is static, what is invisible, and what to read with care.
-- [Formerly repolife](formerly-repolife.md): what still works under the old name, and until when.
+- [Formerly repolife](formerly-repolife.md): what to rename when upgrading from the old name.
 
 Design contracts and acceptance records are in [docs/design](../design/); copyable CI and agent recipes are in
 [workflow-recipes.md](../workflow-recipes.md); the examples of a review brief are in [docs/examples](../examples/).

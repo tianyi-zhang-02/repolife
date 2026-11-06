@@ -1,11 +1,10 @@
 # Architecture
 
 One pass over a repository builds one `Analysis`; every command is a view of it, and no view reads the files again.
-The package is standard library only, about 6,000 lines of code in 32 files. The table is the import graph of this
+The package is standard library only, about 7,400 lines of code in 33 files. The table is the import graph of this
 checkout as `tessri graph . --level file --format json` reads it, and `tessri graph .` reports the one thing the
-layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs` and
-`analyzers/__init__.py` takes the old plugin group name from `legacy`, so `tessri` and `tessri/analyzers` depend on
-each other, a cycle the tool lists against itself.
+layering does not keep: `analyzers/python.py` imports the dotted-name patterns of `textrefs`, so `tessri` and
+`tessri/analyzers` depend on each other, a cycle the tool lists against itself.
 
 ```text
 repository ─► inventory ─► analyzers ─► graph ─► analyze ─► Analysis ─► one view per command ─► cli
@@ -22,7 +21,7 @@ repository ─► inventory ─► analyzers ─► graph ─► analyze ─► 
 | Verdict | `analyze`, `model` | one `FileRecord` per file, the status rules, and the `Analysis` everything below reads |
 | Views | `report` + `render` (scan, Markdown and JSON), `htmlreport` + `htmlassets` + `graphview` (HTML, mermaid, dot), `explain` (why), `modules` (graph, impact), `review` (review load), `triage`, `since` + `sinceview` + `sarifview` (check), `brief` (triage and check from one pair of analyses, on one page), `mcp` (the same answers as tools over stdin/stdout) | each computes its own tables from an `Analysis` and renders them; `render` is the shared Markdown, `meta` the shared `meta` block |
 | Front door | `cli` | argparse, `--format` and `--out`, and the exit codes: 0; 1 for a `--fail-on` gate that failed or an integration plan blocked by conflicts, always with the complete result; 2 for a caught error, with nothing on stdout |
-| Into other repositories | `templates`, `mount`, `integration` | the skill text, the legacy `init`, and the receipt-based install, update, status and remove |
+| Into other repositories | `templates`, `integration` | the texts written into a project (skill, block, workflow, configuration) and the receipt-based install, update, status and remove |
 
 Three commands run the pipeline against another revision. `triage` analyses the working tree with history read up to the
 base of the change, so the change's own commits count neither as activity nor as ownership. `check` extracts the base
@@ -41,8 +40,7 @@ The engine in `tessri/graph.py` knows nothing about any language. An analyzer ma
 `edges` (what each depends on), `roots` (entry points), `tests`, and a `resolve_reference` for names
 found in config. Subclass `tessri.analyzers.Analyzer`, implement `handles(path)` and
 `run(files, repo)`, return a `LanguageResult`, and register it from a package through the
-`tessri.analyzers` entry-point group (the `repolife.analyzers` group an older version used is read too, through
-0.2.x). `repo.paths` lists every file and `repo.read(path)` returns
+`tessri.analyzers` entry-point group. `repo.paths` lists every file and `repo.read(path)` returns
 any file's text, for project metadata such as `tsconfig.json` or `go.mod`.
 
 Two reference implementations, written against the same interface: `tessri/analyzers/python.py`

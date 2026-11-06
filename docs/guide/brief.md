@@ -6,6 +6,7 @@ what needs a person.
 
 ```bash
 tessri brief --since main                                                        # a branch against main, plus uncommitted work
+tessri brief                                                                     # the same against the default branch (origin/HEAD, else main or master)
 tessri brief --since main --ran "python -m pytest tests/test_x.py: 12 passed (exit 0)"   # record what you ran, one --ran per check
 tessri brief --since main --format json                                          # the sections as data, with the whole triage and check objects
 tessri brief --since main --out brief.md                                         # a file to paste into the change's description

@@ -5,7 +5,8 @@ to look?
 
 ```bash
 tessri triage --since main                 # a branch, judged from where it parted from main, plus uncommitted work
-tessri triage                              # only uncommitted work
+tessri triage                              # the same against the default branch: origin/HEAD, else origin/main, origin/master, main or master
+tessri triage --since HEAD                 # only uncommitted work
 tessri triage --since main --format json   # for an agent
 ```
 

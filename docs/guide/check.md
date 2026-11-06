@@ -5,7 +5,8 @@ an exit code for CI and SARIF for tools that read it.
 
 ```bash
 tessri check --since main                  # a branch, judged from where it parted from main, plus uncommitted work
-tessri check                               # only uncommitted work
+tessri check                               # the same against the default branch: origin/HEAD, else origin/main, origin/master, main or master
+tessri check --since HEAD                  # only uncommitted work
 tessri check --since main --fail-on block  # exit 1 when something is certain to break
 tessri check --since main --format sarif --out check.sarif   # the same findings for tools that read SARIF
 ```

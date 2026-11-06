@@ -8,10 +8,9 @@ from pathlib import Path
 from helpers import TempRepo, git, write_tree
 from tessri import config, inventory, templates
 from tessri.analyze import analyze
-from tessri.cli import DEFAULT_INSTALL_SPEC, main
+from tessri.cli import main
 from tessri.explain import TargetError, explain
 from tessri.model import SCHEMA_VERSION
-from tessri.mount import BEGIN, END, mount
 from tessri.report import build_report
 
 TREE = {
@@ -195,60 +194,44 @@ class ReportAndCliTest(TempRepo):
         self.assertEqual(first, second)
 
 
-class MountTest(TempRepo):
-    def test_init_is_idempotent_and_non_destructive(self):
-        (self.root / "AGENTS.md").write_text("# Agents\n\nExisting guidance.\n")
-        (self.root / ".gitignore").write_text("node_modules/\n")
+class RootOptionTest(TempRepo):
+    """Every command takes `--repo`; `scan` and `graph` also take the root as their first argument, once."""
 
-        first = {a.path: a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/tessri", False, False)}
-        self.assertEqual(first[".tessri.toml"], "created")
-        self.assertEqual(first["AGENTS.md"], "updated")
-        agents = (self.root / "AGENTS.md").read_text()
-        self.assertTrue(agents.startswith("# Agents\n\nExisting guidance."))
-        self.assertEqual(agents.count(BEGIN), 1)
-        self.assertIn("git+https://example.com/tessri", (self.root / ".github/workflows/tessri.yml").read_text())
-        self.assertEqual((self.root / ".gitignore").read_text(), "node_modules/\n.tessri/\n")
+    def setUp(self):
+        super().setUp()
+        write_tree(self.root, {"pkg/__init__.py": "", "pkg/a.py": "from pkg import b\n", "pkg/b.py": "x = 1\n"})
 
-        second = {a.verb for a in mount(self.root, {"claude", "agents"}, "github", "git+https://example.com/tessri", False, False)}
-        self.assertEqual(second, {"unchanged"})
-
-    def test_ci_workflow_installs_from_the_repository_by_default(self):
-        with contextlib.redirect_stdout(io.StringIO()):
-            self.assertEqual(main(["init", str(self.root), "--ci", "github"]), 0)
-        workflow = (self.root / ".github/workflows/tessri.yml").read_text()
-        self.assertNotIn("__INSTALL_SPEC__", workflow)
-        self.assertIn(f'pip install "{DEFAULT_INSTALL_SPEC}"', workflow)
-
-    def test_edited_files_are_left_alone_unless_forced(self):
-        mount(self.root, {"claude"}, None, "tessri")
-        skill = self.root / ".claude/skills/tessri/SKILL.md"
-        skill.write_text("my edits\n")
-        self.assertEqual({a.path: a.verb for a in mount(self.root, {"claude"}, None, "tessri")}[".claude/skills/tessri/SKILL.md"], "skipped")
-        self.assertEqual(skill.read_text(), "my edits\n")
-        mount(self.root, {"claude"}, None, "tessri", force=True)
-        self.assertEqual(skill.read_text(), templates.SKILL)
-
-    def test_marked_block_is_updated_in_place(self):
-        (self.root / "AGENTS.md").write_text(f"top\n{BEGIN}\nstale\n{END}\nbottom\n")
-        mount(self.root, {"agents"}, None, "tessri")
-        text = (self.root / "AGENTS.md").read_text()
-        self.assertTrue(text.startswith("top\n") and text.endswith("\nbottom\n"))
-        self.assertNotIn("stale", text)
-
-    def test_dry_run_writes_nothing(self):
-        actions = mount(self.root, {"claude", "agents"}, "github", "tessri", dry_run=True)
-        self.assertTrue(actions)
-        self.assertEqual(list(self.root.iterdir()), [])
-
-    def test_works_in_an_empty_new_repo(self):
+    def run_cli(self, *argv):
         out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self.assertEqual(main(["init", str(self.root), "--agent", "none"]), 0)
-        self.assertTrue((self.root / ".tessri.toml").exists())
-        out = io.StringIO()
-        with contextlib.redirect_stdout(out):
-            self.assertEqual(main(["scan", str(self.root), "--format", "json"]), 0)
-        self.assertEqual(json.loads(out.getvalue())["summary"]["orphans"]["files"], 0)
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
+            code = main(list(argv))
+        return code, out.getvalue()
+
+    def test_scan_and_graph_take_the_root_either_way(self):
+        for cmd in ("scan", "graph"):
+            code, positional = self.run_cli(cmd, str(self.root), "--format", "json")
+            code2, option = self.run_cli(cmd, "--repo", str(self.root), "--format", "json")
+            self.assertEqual((code, code2), (0, 0))
+            self.assertEqual(json.loads(positional)["summary"], json.loads(option)["summary"], cmd)
+        code, out = self.run_cli("scan", str(self.root), "--repo", str(self.root), "--format", "json")  # the same root twice is fine
+        self.assertEqual((code, json.loads(out)["kind"]), (0, "scan"))
+
+    def test_two_different_roots_are_refused(self):
+        with self.assertRaises(SystemExit) as caught:
+            main(["scan", str(self.root), "--repo", str(self.root / "pkg")])
+        self.assertIn("given twice", str(caught.exception))
+
+
+class OldNameTest(unittest.TestCase):
+    """Tessri had another name until 0.2.0; 0.3.0 removed it, and nothing in the package or the skill spells it."""
+
+    def test_the_old_name_is_gone(self):
+        old, top = "repolife", Path(__file__).resolve().parent.parent
+        offenders = [p.relative_to(top).as_posix() for p in sorted((top / "tessri").rglob("*.py")) if old in p.read_text(encoding="utf-8").lower()]
+        self.assertEqual(offenders, [])
+        for rel in ("skills/tessri/SKILL.md", "pyproject.toml"):
+            self.assertNotIn(old, (top / rel).read_text(encoding="utf-8").lower(), rel)
+        self.assertFalse((top / old).exists())
 
 
 class PluginFilesTest(unittest.TestCase):

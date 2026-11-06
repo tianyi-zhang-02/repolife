@@ -271,11 +271,17 @@ class UncommittedTest(Repo):
         self.assertEqual((by["core/a.py"]["added"], by["core/a.py"]["fixes_90"]), (4, 2))
         self.assertEqual((by["core/new.py"]["added"], by["core/new.py"]["change"]), (2, "added"))
 
-    def test_the_command_defaults_to_uncommitted_work(self):
+    def test_without_since_the_change_is_judged_against_the_default_branch(self):
         (self.root / "core/a.py").write_text((self.root / "core/a.py").read_text() + "\n\ndef extra():\n    return 9\n")
         code, out, _ = run_cli("triage", "--repo", str(self.root), "--format", "json")
-        data = json.loads(out)
-        self.assertEqual((code, data["change"]["since"], data["change"]["uncommitted"], [r["path"] for r in data["files"]]), (0, "HEAD", True, ["core/a.py"]))
+        data = json.loads(out)  # on main itself, that is the uncommitted work
+        self.assertEqual((code, data["change"]["since"], data["change"]["uncommitted"], [r["path"] for r in data["files"]]), (0, "main", True, ["core/a.py"]))
+        git(self.root, "checkout", "-q", "--", "core/a.py")
+        self.feature()
+        code, out, _ = run_cli("triage", "--repo", str(self.root), "--format", "json")
+        data = json.loads(out)  # on a branch, the branch against main
+        self.assertEqual((code, data["change"]["since"], data["change"]["authors"]), (0, "main", ["Carol Chen"]))
+        self.assertEqual(sorted(r["path"] for r in data["files"]), ["core/a.py", "core/b.py", "core/d.py", "util/c.py"])
 
     def test_a_clean_tree_has_nothing_to_triage(self):
         t = triage.compute(self.root, config.load(self.root), "HEAD", now=self.now)
