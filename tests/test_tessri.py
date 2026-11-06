@@ -239,6 +239,13 @@ class PluginFilesTest(unittest.TestCase):
         bundled = Path(__file__).resolve().parent.parent / "skills/tessri/SKILL.md"
         self.assertEqual(bundled.read_text(), templates.SKILL)
 
+    def test_this_repository_runs_the_review_workflow_it_ships(self):
+        """The same file the `review` profile installs, installing Tessri from the checkout since this repository is Tessri."""
+        from tessri import __version__
+
+        here = Path(__file__).resolve().parent.parent / ".github/workflows/tessri-review.yml"
+        self.assertEqual(here.read_text(), templates.REVIEW_WORKFLOW.replace(f"pip install tessri=={__version__}", "pip install ."))
+
 
 if __name__ == "__main__":
     unittest.main()

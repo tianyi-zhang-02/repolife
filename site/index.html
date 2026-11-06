@@ -121,7 +121,7 @@
     <ol class="steps">
       <li><b>Scan a repository.</b> <code>tessri scan .</code> prints the report; <code>--format html --out report.html</code> writes one offline page with the explorer.</li>
       <li><b>Ask before, during and after a change.</b> <code>tessri impact &lt;path&gt;</code> before, <code>tessri triage</code> to review one, <code>tessri check</code> when it is done, <code>tessri brief</code> to hand it over on one page; without <code>--since</code>, a branch is judged against the default branch.</li>
-      <li><b>Give it to your agent.</b> <code>tessri integration install --agent claude</code> (or <code>codex</code>) installs the skill with a receipt; <code>tessri integration remove</code> takes it out again.</li>
+      <li><b>Give it to your agent, and to every pull request.</b> <code>tessri integration install --agent claude</code> (or <code>codex</code>) installs the skill with a receipt, <code>--agent review</code> posts the brief on every pull request; <code>tessri integration remove</code> takes it all out again.</li>
     </ol>
   </section>
 

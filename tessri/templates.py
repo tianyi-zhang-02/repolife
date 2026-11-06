@@ -1,4 +1,8 @@
-"""Text written into a repository by `tessri integration install`. Kept as strings so the tool works from a zipapp too."""
+"""Text written into a repository by `tessri integration install`. Kept as strings so the tool works from a zipapp too.
+The two workflows pin the Tessri that installed them, so `integration status` says `installed-outdated` after an
+upgrade and `integration update` refreshes the pin."""
+
+from . import __version__
 
 CONFIG = """\
 # Tessri configuration. Every option is optional; see `tessri scan --help`.
@@ -280,7 +284,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: pip install tessri
+      - run: pip install tessri==__VERSION__
       - name: Scan
         run: |
           tessri scan . --format json --out tessri-report.json
@@ -292,4 +296,78 @@ jobs:
           path: |
             tessri-report.json
             tessri-report.html
-"""
+""".replace("__VERSION__", __version__)
+
+REVIEW_WORKFLOW = """\
+# Tessri's review brief on every pull request: the page that hands the change over, as one comment that is updated in
+# place on every push (from a fork, whose token cannot comment, the page is in the run's summary instead), and the
+# structural findings as a SARIF file kept with the page as an artifact. The base is the pull request's own, never an
+# assumed branch name. Installed by `tessri integration install --agent review`; the file is yours once edited.
+name: tessri review
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write # the comment
+
+concurrency:
+  group: tessri-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    env:
+      BASE: ${{ github.base_ref }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }} # the branch as pushed, not the merge commit the event carries
+          fetch-depth: 0 # the base, and the history up to it
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install tessri==__VERSION__
+      - name: Brief
+        run: |
+          tessri brief --since "origin/$BASE" --out tessri-brief.md
+          cat tessri-brief.md >> "$GITHUB_STEP_SUMMARY"
+      - name: Comment
+        if: github.event.pull_request.head.repo.full_name == github.repository # a fork's token cannot comment
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          marker='<!-- tessri:review -->'
+          {
+            printf '%s\\n' "$marker"
+            cat tessri-brief.md
+            printf '\\n_`tessri brief --since origin/%s` at %s, by [this run](%s); updated on every push._\\n' "$BASE" "${HEAD_SHA:0:9}" "$RUN_URL"
+          } > tessri-comment.md
+          existing=$(gh api "repos/$REPO/issues/$NUMBER/comments" --paginate --jq ".[] | select(.body | startswith(\\"$marker\\")) | .id" | head -n 1)
+          if [ -n "$existing" ]; then
+            gh api --method PATCH "repos/$REPO/issues/comments/$existing" -F body=@tessri-comment.md --silent
+          else
+            gh api --method POST "repos/$REPO/issues/$NUMBER/comments" -F body=@tessri-comment.md --silent
+          fi
+      - name: Check
+        # --fail-on block fails the job when a deleted file is still imported; turning that gate on is the team's choice
+        run: tessri check --since "origin/$BASE" --format sarif --locationless omit --fail-on never --out tessri-check.sarif
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tessri-review
+          path: |
+            tessri-brief.md
+            tessri-check.sarif
+      # For the findings as code-scanning alerts, on a repository where code scanning is on: add
+      # `security-events: write` to the permissions above and this step.
+      # - uses: github/codeql-action/upload-sarif@v3
+      #   with:
+      #     sarif_file: tessri-check.sarif
+      #     category: tessri
+""".replace("__VERSION__", __version__)

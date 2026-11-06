@@ -30,14 +30,23 @@ Behaviour changes:
   commented out; the file is yours from the moment it is written, `update` never rewrites it, a deleted one is
   forgotten rather than recreated, and `remove` deletes it only while it is untouched and otherwise just stops
   recording it (a target of kind `seed` in the receipt; `manifest_version` stays 1). `--agent report` installs
-  the weekly scan workflow at `.github/workflows/tessri-report.yml`, managed like a skill, with
-  `pip install tessri` in place of `--install-spec`. The `.gitignore` line `init` added (`.tessri/`, a directory
+  the weekly scan workflow at `.github/workflows/tessri-report.yml`, managed like a skill, pinned to the Tessri
+  that installed it (`pip install tessri==<version>`; after an upgrade `status` says `installed-outdated` and
+  `update` refreshes the pin) in place of `--install-spec`. The `.gitignore` line `init` added (`.tessri/`, a directory
   nothing writes) is not carried over, and a workflow `init` wrote at `.github/workflows/tessri.yml` is an
   unmanaged file to delete once `report` is installed.
 - The skill's note on roots says `--repo` first; `tessri --help` no longer mentions the former name.
 
 Also in this version, since 0.2.0:
 
+- `tessri integration install --agent review`: the review brief on every pull request, whoever or whatever wrote
+  it. The workflow (`.github/workflows/tessri-review.yml`, managed like a skill and pinned the same way) checks the
+  branch out as pushed with the whole history, runs `tessri brief --since origin/<base>` with the pull request's
+  own base, posts the page as one comment that it finds again by its marker and updates in place on every push,
+  puts the same page in the run's summary, and keeps it with `check --format sarif --locationless omit` as an
+  artifact. From a fork, whose token cannot comment, the summary and the artifact are all there is. The gate and
+  the upload to code scanning are commented lines, the team's to turn on. This repository runs it on its own pull
+  requests.
 - `tessri brief --since <base>`: one page to hand a change over, with the sections the review-brief design asked for.
   It is triage and check from one pair of analyses (the base and the working tree, each analysed once, so the page
   costs what `check` costs): the exact state the evidence describes (full base and HEAD, the commits on the way in

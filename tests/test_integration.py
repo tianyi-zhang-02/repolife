@@ -4,8 +4,12 @@ import contextlib
 import io
 import json
 import os
+import shutil
+import subprocess
 import sys
+import tempfile
 import unittest
+import pathlib
 from pathlib import Path
 from unittest import mock
 
@@ -547,7 +551,7 @@ class SeedAndReportTest(Project):
         self.assertEqual((self.root / self.CONFIG).read_text(), templates.CONFIG)
         workflow = (self.root / self.WORKFLOW).read_text()
         self.assertEqual(workflow, templates.REPORT_WORKFLOW)
-        self.assertIn("pip install tessri\n", workflow)
+        self.assertIn(f"pip install tessri=={integration.__version__}\n", workflow)
         self.assertEqual({t["profile"]: t["kind"] for t in self.receipt()["targets"]}, {"config": "seed", "report": "file"})
         self.assertEqual(len(doc["notes"]), 2)
         for note in doc["notes"]:
@@ -588,6 +592,25 @@ class SeedAndReportTest(Project):
         self.assertFalse((self.root / self.CONFIG).exists())
         self.assertFalse((self.root / RECEIPT).exists())
 
+    def test_the_review_workflow_is_a_managed_file_too(self):
+        doc = run(self.root, "install", ["review"])
+        self.assertEqual(self.actions(doc), {"review": "create"})
+        path = self.root / ".github/workflows/tessri-review.yml"
+        self.assertEqual(path.read_text(), templates.REVIEW_WORKFLOW)
+        self.assertNotIn("running host", doc["notes"][0])
+        for text in (templates.REVIEW_WORKFLOW, templates.REPORT_WORKFLOW):
+            self.assertIn(f"pip install tessri=={integration.__version__}\n", text)  # pinned to the Tessri that installed it
+            self.assertNotIn("__VERSION__", text)
+        self.assertIn("on:\n  pull_request:\n", templates.REVIEW_WORKFLOW)
+        self.assertIn("pull-requests: write", templates.REVIEW_WORKFLOW)
+        self.assertNotIn("security-events: write\n", templates.REVIEW_WORKFLOW.replace("# `security-events: write`", ""))  # the upload is opt-in
+        self.assertIn('--since "origin/$BASE"', templates.REVIEW_WORKFLOW)
+        self.assertNotIn("origin/main", templates.REVIEW_WORKFLOW)  # the base is the event's, never an assumed name
+        self.assertIn("--fail-on never", templates.REVIEW_WORKFLOW)
+        doc = run(self.root, "remove", None)
+        self.assertEqual(self.actions(doc), {"review": "remove"})
+        self.assertFalse((self.root / ".github").exists())
+
     def test_the_workflow_is_managed_like_a_skill(self):
         run(self.root, "install", ["report"])
         path = self.root / self.WORKFLOW
@@ -599,6 +622,65 @@ class SeedAndReportTest(Project):
         doc = run(self.root, "remove", None)
         self.assertEqual(self.actions(doc), {"report": "remove"})
         self.assertFalse((self.root / ".github").exists())
+
+
+def comment_script() -> str:
+    """The shell of the review workflow's Comment step, as the runner would get it."""
+    lines = templates.REVIEW_WORKFLOW.splitlines()
+    start = lines.index("      - name: Comment")
+    run_at = next(i for i in range(start, len(lines)) if lines[i] == "        run: |")
+    body = []
+    for line in lines[run_at + 1 :]:
+        if line.strip() and not line.startswith("          "):
+            break
+        body.append(line[10:])
+    return "\n".join(body) + "\n"
+
+
+@unittest.skipIf(shutil.which("bash") is None, "the comment step is a bash script")
+class ReviewCommentTest(unittest.TestCase):
+    """The Comment step posts one comment that starts with the marker and updates it in place afterwards. A stub `gh`
+    records what it is asked and answers the listing with the ids the test chooses."""
+
+    STUB = """#!/bin/sh
+printf '%s\\n' "$*" >> "$GH_LOG"
+case "$*" in
+  *"--paginate"*) printf '%s' "$GH_EXISTING" ;;
+esac
+"""
+
+    def post(self, existing: str) -> tuple[list[str], str]:
+        with tempfile.TemporaryDirectory() as tmp:
+            work = pathlib.Path(tmp)
+            (work / "bin").mkdir()
+            stub = work / "bin/gh"
+            stub.write_text(self.STUB)
+            stub.chmod(0o755)
+            (work / "tessri-brief.md").write_text("# Review brief: demo\n\nthe page\n")
+            env = {
+                **os.environ,
+                "PATH": f"{work / 'bin'}{os.pathsep}{os.environ['PATH']}",
+                "GH_LOG": str(work / "log"),
+                "GH_EXISTING": existing,
+                "BASE": "main",
+                "REPO": "o/r",
+                "NUMBER": "12",
+                "HEAD_SHA": "0123456789abcdef",
+                "RUN_URL": "https://example.test/runs/1",
+            }
+            res = subprocess.run(["bash", "-eo", "pipefail", "-c", comment_script()], cwd=work, env=env, capture_output=True, text=True)
+            self.assertEqual(res.returncode, 0, res.stderr)
+            return (work / "log").read_text().splitlines(), (work / "tessri-comment.md").read_text()
+
+    def test_the_first_run_posts_and_the_next_updates_in_place(self):
+        calls, comment = self.post(existing="")
+        self.assertEqual(comment, "<!-- tessri:review -->\n# Review brief: demo\n\nthe page\n\n_`tessri brief --since origin/main` at 012345678, by [this run](https://example.test/runs/1); updated on every push._\n")
+        self.assertEqual(len(calls), 2)
+        self.assertTrue(calls[0].startswith("api repos/o/r/issues/12/comments --paginate --jq "))
+        self.assertIn('startswith("<!-- tessri:review -->")', calls[0])
+        self.assertEqual(calls[1], "api --method POST repos/o/r/issues/12/comments -F body=@tessri-comment.md --silent")
+        calls, _ = self.post(existing="7\n9\n")  # the first comment with the marker is the one
+        self.assertEqual(calls[1], "api --method PATCH repos/o/r/issues/comments/7 -F body=@tessri-comment.md --silent")
 
 
 if __name__ == "__main__":
