@@ -114,3 +114,7 @@ the kinds are the finding kinds that need a person, `only-the-author`, `not-anal
 which says `skipped` with reason `no-code-changes` when there was nothing to compare. A bad base, or a directory that
 is not a git repository, exits 2 with the sentence on standard error and nothing on standard output; the brief has no
 gate, that is `check --fail-on`. The [MCP server](mcp.md) serves the same page and object as `tessri_brief`.
+
+On every pull request, whoever or whatever wrote it: `tessri integration install --agent review` installs a
+workflow that posts this page as one comment on the pull request, updated in place on every push, with the pull
+request's own base ([integration](integration.md)).

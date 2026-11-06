@@ -9,8 +9,8 @@ conflict and is left alone; so is a recorded file the user has edited. Every mut
 full before the first write, a dry run writes nothing, single files are replaced atomically and an ordinary failure
 is rolled back. This is not a cross-file transaction.
 
-A profile is one of four kinds. `file`: the whole file is Tessri's (a skill, Copilot's instructions, the report
-workflow). `span`: one marked block inside a shared `AGENTS.md`. `key`: one entry in a shared JSON object. `seed`:
+A profile is one of four kinds. `file`: the whole file is Tessri's (a skill, Copilot's instructions, the two
+workflows). `span`: one marked block inside a shared `AGENTS.md`. `key`: one entry in a shared JSON object. `seed`:
 a starting file that is the user's from the moment it is written (`.tessri.toml`): `update` never rewrites it,
 `remove` deletes it only while it is untouched and otherwise just stops recording it, and a deleted one is
 forgotten rather than recreated.
@@ -74,6 +74,7 @@ PROFILES = {
     "vscode": Profile("vscode", ".vscode/mcp.json", "key", "an editor that reads .vscode/mcp.json starts the server on its next agent request", body="VSCODE_SERVER", key=("servers", "tessri")),
     "config": Profile("config", ".tessri.toml", "seed", "edit it; every option is optional, and the file is yours from now on (update leaves it alone, remove keeps it once edited)", body="CONFIG", host=False),
     "report": Profile("report", ".github/workflows/tessri-report.yml", "file", "the workflow runs on its schedule once the file is on the default branch", body="REPORT_WORKFLOW", host=False),
+    "review": Profile("review", ".github/workflows/tessri-review.yml", "file", "the workflow runs on the next push to a pull request; from a fork, the page is in the run's summary, since the token cannot comment", body="REVIEW_WORKFLOW", host=False),
 }
 
 # Who reads what: the profiles that carry a host's instructions and the one that points it at the server, in the

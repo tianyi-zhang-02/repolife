@@ -62,8 +62,8 @@ real history, and the composite risk score we tried did not beat its parts, so t
    `tessri brief` to hand it over on one page; without `--since`, a branch is judged against the default branch.
 3. `tessri integration install --agent claude` (or `codex`, `agents`, `copilot`) installs the agent's
    instructions with a receipt, `--agent mcp` points a host at `tessri mcp`, the same questions as MCP tools,
-   `--agent config` writes a starter `.tessri.toml` and `--agent report` a weekly report workflow;
-   `tessri integration remove` takes it all out again.
+   `--agent config` writes a starter `.tessri.toml`, `--agent report` a weekly report workflow and
+   `--agent review` the brief as a comment on every pull request; `tessri integration remove` takes it all out again.
 
 ## Read more
 
