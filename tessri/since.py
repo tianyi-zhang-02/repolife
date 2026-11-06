@@ -109,6 +109,13 @@ def _renamed(a: Analysis, moves: dict[str, str]) -> Analysis:
     return dataclasses.replace(a, records=records, graph=graph)
 
 
+def analyse_base(root: Path, base: str, prefix: str, cfg: Config, skip: list[str], now: float) -> Analysis:
+    """The base of the change analysed in a scratch directory, straight from git objects; the repository is not touched."""
+    with tempfile.TemporaryDirectory(prefix="tessri-base-") as scratch:
+        extract_tree(root, base, prefix, Path(scratch), skip)
+        return analyze(Path(scratch), cfg, now=now)
+
+
 def extract_tree(root: Path, base: str, prefix: str, dest: Path, skip: list[str]) -> int:
     """Write the files of the base commit (below `prefix`) into `dest`, straight from git objects: unlike
     `git archive` this ignores `export-ignore`, which would make files vanish from the base. Files the analysis
@@ -326,8 +333,10 @@ def compare(base_a: Analysis, head_a: Analysis, changed: dict[str, gitlog.FileCh
     }
 
 
-def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None) -> dict:
-    """The JSON-ready result of comparing `since` (as it was where it left HEAD) with the working tree."""
+def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None, analyses: tuple[Analysis, Analysis] | None = None) -> dict:
+    """The JSON-ready result of comparing `since` (as it was where it left HEAD) with the working tree. `analyses` is
+    the pair (base, working tree with history up to the base), both with review load off, when the caller has made
+    them already (`brief` makes one pair for triage and check); otherwise they are made here."""
     root = Path(root).resolve()
     now = time.time() if now is None else now
     base, head, prefix = resolve_base(root, since)
@@ -369,11 +378,12 @@ def check(root: Path, cfg: Config, since: str = "HEAD", now: float | None = None
         result.update({"findings": [], "orphans": {"new": [], "resolved": []}, "dangling_imports": [], "cycles": {"new": [], "grown": [], "resolved": []}, "dependencies": {"new": [], "removed": []}, "unowned": [], "modules_touched": []})
         result["summary"]["findings"] = {s: 0 for s in SEVERITIES}
         return result
-    quiet = dataclasses.replace(cfg, review_days=0)
-    with tempfile.TemporaryDirectory(prefix="tessri-base-") as scratch:
-        extract_tree(root, base, prefix, Path(scratch), skip)
-        base_a = analyze(Path(scratch), quiet, now=now)
-    head_a = analyze(root, quiet, now=now, rev=base)
+    if analyses is not None:
+        base_a, head_a = analyses
+    else:
+        quiet = dataclasses.replace(cfg, review_days=0)
+        base_a = analyse_base(root, base, prefix, quiet, skip, now)
+        head_a = analyze(root, quiet, now=now, rev=base)
     result["meta"] = meta.of(head_a, change=change_ids, analysis={"structure": "complete", "reason": None})
     result.update(compare(base_a, head_a, changed))
     result["summary"]["findings"] = {s: sum(f["severity"] == s for f in result["findings"]) for s in SEVERITIES}

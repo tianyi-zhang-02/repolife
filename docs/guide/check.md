@@ -78,3 +78,6 @@ dependencies and orphans instead of reporting them gone and new again. A moved f
 imports under its old name is a `dangling-import`, with `moved_to` beside the old path. A move git does not recognise,
 or one not yet added to the index, is still a deletion and an addition. Files the analysis does not read (symlinks,
 submodules, anything above the size limit, anything excluded) are not part of either side.
+
+`tessri brief --since main` puts this and `triage` on one page from one analysis, with the commits and uncommitted
+files the evidence covers and the checks you ran: [the review brief](brief.md).

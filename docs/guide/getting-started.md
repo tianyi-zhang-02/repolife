@@ -12,6 +12,7 @@ tessri graph .                # how modules depend on each other, and the cycles
 tessri impact path/to/file.py # what a change can reach, the tests that reach it, who to tell
 tessri triage --since main    # the files of a change to look at first, and who can look
 tessri check --since main     # what a change did to the structure, with an exit code for CI
+tessri brief --since main     # one page to hand the change over: both of the above, from one analysis, with what you ran
 ```
 
 No install at all: build a single 300 KB file and drop it into any repository.

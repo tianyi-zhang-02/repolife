@@ -5,8 +5,8 @@ command: its result carries the command's `--format json` object as `structuredC
 Markdown as `content`, both from one analysis, so the agent sees what the terminal shows. Nothing is written and no
 network is touched. Every call sees the checkout as it is: an analysis is reused for a later call only while the
 checkout's fingerprint (HEAD, the paths git reports as changed or untracked with their sizes and modification
-times, the configuration files) is unchanged, and for at most an hour; a change query (`triage`, `check`) always
-reads afresh.
+times, the configuration files) is unchanged, and for at most an hour; a change query (`triage`, `check`, `brief`)
+always reads afresh.
 
 Two revisions of the protocol are spoken, because clients are on both: the 2026-07-28 revision has no handshake
 (every request carries its version in `_meta`, and `server/discover` says what the server is), the earlier ones
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence, TextIO
 
-from . import __version__, config, gitlog, graphview, legacy, modules, since, sinceview
+from . import __version__, brief, config, gitlog, graphview, legacy, modules, since, sinceview
 from .analyze import Analysis, analyze
 from .explain import TargetError, explain, why_json
 from .gitlog import _git_line as git_line  # one-line probes, as the history reader runs them
@@ -51,7 +51,8 @@ INSTRUCTIONS = (
     "Tessri reads a repository and its git history and answers a maintainer's questions with the evidence for every "
     "claim; it never edits code. Pick the tool by the question: tessri_impact before changing a file or directory "
     "(dependents, candidate tests, maintainers); tessri_triage to review a change (which files deserve a person "
-    "first, who can look); tessri_check when a change is done (what it did to the structure); tessri_why to verify "
+    "first, who can look); tessri_check when a change is done (what it did to the structure); tessri_brief to hand a "
+    "change over for review (triage and check in one page, with the checks the host ran passed in `ran`); tessri_why to verify "
     "a claim about one file before acting on it; tessri_scan and tessri_graph to get to know a repository or plan a "
     "cleanup. Paths are repository-relative with `/`; `root` names the checkout (tessri_repos lists them) and is "
     "optional when the server serves one. Each result holds the command's JSON as structuredContent and its text as "
@@ -193,6 +194,15 @@ def _check(server: Server, args: dict) -> tuple[str, dict]:
     return sinceview.markdown(result, 20), result
 
 
+def _brief(server: Server, args: dict) -> tuple[str, dict]:
+    root, cfg = server.configured(args)
+    try:
+        result = brief.compute(root, cfg, args.get("since", "HEAD"), ran=args.get("ran") or [])
+    except brief.BriefError as exc:
+        raise Mistake(str(exc)) from exc
+    return brief.markdown(result), result
+
+
 _SINCE = {"type": "string", "default": "HEAD", "description": "a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work (HEAD: only uncommitted work)"}
 
 TOOLS: tuple[Tool, ...] = (
@@ -248,6 +258,18 @@ TOOLS: tuple[Tool, ...] = (
         (),
         _check,
     ),
+    Tool(
+        "tessri_brief",
+        "Brief",
+        "One page to hand a change over for review: triage and check from one analysis, the commits and uncommitted files the evidence covers, the files to look at first, the findings, candidate tests apart from the checks the host ran, who can look and what needs a person.",
+        {
+            "root": ROOT,
+            "since": _SINCE,
+            "ran": {"type": "array", "items": {"type": "string"}, "default": [], "description": "the checks the host actually ran, one string each with the command, its result and exit code, recorded verbatim; without it the brief says that none was recorded"},
+        },
+        (),
+        _brief,
+    ),
 )
 BY_NAME = {t.name: t for t in TOOLS}
 
@@ -261,6 +283,8 @@ def _type_ok(value: Any, kind: str) -> bool:
         return isinstance(value, int) and not isinstance(value, bool)
     if kind == "string":
         return isinstance(value, str)
+    if kind == "array":
+        return isinstance(value, list)
     return True
 
 
@@ -278,6 +302,8 @@ def validate(tool: Tool, args: Any) -> str | None:
         kinds = spec["type"] if isinstance(spec["type"], list) else [spec["type"]]
         if not any(_type_ok(value, k) for k in kinds):
             return f"`{name}` must be {' or '.join(kinds)}"
+        if "items" in spec and isinstance(value, list) and not all(_type_ok(item, spec["items"]["type"]) for item in value):
+            return f"`{name}` must be an array of {spec['items']['type']}s"
         if "enum" in spec and value not in spec["enum"]:
             return f"`{name}` must be one of {', '.join(spec['enum'])}"
         if "minimum" in spec and value is not None and value < spec["minimum"]:

@@ -49,11 +49,12 @@ Pick the query by the task, and do not start every task with a full scan:
 - about to edit a file or directory: `tessri impact <path>` for possible dependents, candidate tests and maintainers
 - preparing or doing a review: `tessri triage --since <base>` for which changed files deserve a person first
 - finishing a change: `tessri check --since <base>` for what it did to the structure
+- handing a change to a person: `tessri brief --since <base> --ran "<check: result>"` for one page with both
 - checking a claim about one file: `tessri why <path>` (`--format json` gives the same facts as data)
 - getting to know a repository, or planning a cleanup: `tessri scan` and `tessri graph`
 
 When Tessri is connected as an MCP server (`tessri mcp`), the same questions are the tools `tessri_scan`,
-`tessri_why`, `tessri_impact`, `tessri_graph`, `tessri_triage` and `tessri_check`; each returns the command's
+`tessri_why`, `tessri_impact`, `tessri_graph`, `tessri_triage`, `tessri_check` and `tessri_brief`; each returns the command's
 JSON as structured content and its text as content, and `tessri_repos` lists the checkouts the server reads.
 
 ## Run it
@@ -149,6 +150,21 @@ loop, `new-orphan` is a new file nothing reaches (`how: stranded` is a file the 
 looks at it; do not pick a reviewer from its last maintainers, and do not stop on your own unless the team asks for
 that). `info` is the rest. Findings are bounded by static analysis and its language coverage; a clean result is not proof.
 
+## Hand a change over
+
+```bash
+tessri brief --since <base> --ran "<command>: <result, exit code>"     # one page for the person; --format json for the data
+```
+
+Run it when the change is ready for a person. It is triage and check from one analysis, in one page: the base,
+HEAD, the commits on the way in their authors' words and the uncommitted files in scope; the changed files to look
+at first with the reasons; the findings; the candidate tests kept apart from the checks that ran; who can look;
+and what needs a person. Every shortened list carries its count, and the JSON holds the whole `triage` and `check`
+objects, so nothing is filtered away. Record what you actually ran with `--ran`, one per check, with its result and
+exit code, verbatim; without it the page says that no check was recorded, and it never infers an execution from the
+candidate tests. Put the page in the change's description, or hand the JSON to the reviewer's tools; it is a reading
+aid, not a verdict, and the diff is still theirs to read.
+
 ## Ownership
 
 `ownership` is inferred from git: each commit credits its author with the files it touched, recent
@@ -215,6 +231,7 @@ AGENTS_BLOCK = """\
 
 Choose repository evidence for the task: `tessri impact <path>` for a file or directory change,
 `tessri triage --since <base>` for review attention, `tessri check --since <base>` for structural effects,
+`tessri brief --since <base> --ran "<check: result>"` for the one page that hands a change to a person,
 and `tessri scan . --format json` with `tessri graph` for orientation or cleanup. Use the project's base
 and gate policy; a full scan is not required for every edit.
 

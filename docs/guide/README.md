@@ -11,9 +11,11 @@ faster than anyone can read it. One page per question, each with real output and
 - [What a change can reach](impact.md): dependents, the tests that reach a file, the evidence behind each edge.
 - [Triage a change](triage.md): which changed files deserve a person first, and who can look.
 - [Check what a change did to the structure](check.md): findings, the exit code for CI, and SARIF.
+- [Hand a change over: the review brief](brief.md): triage and check on one page, from one analysis, with the
+  state the evidence describes and what the host ran kept apart from candidate tests.
 - [The HTML report](html-report.md): one offline page with the explorer.
 - [Integration: skills, AGENTS.md, CI](integration.md): the receipt-managed install, and the older `init`.
-- [MCP: Tessri as tools](mcp.md): `tessri mcp`, the seven tools, their arguments and errors, and the profiles that
+- [MCP: Tessri as tools](mcp.md): `tessri mcp`, the eight tools, their arguments and errors, and the profiles that
   point each agent at the server.
 - [Configuration](configuration.md): `.tessri.toml` and `[tool.tessri]`.
 - [JSON output](json.md): the objects, `schema_version` and the `meta` block.

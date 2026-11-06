@@ -58,10 +58,10 @@ def untimed(text):
 
 def unstamped(doc):
     """The object without the moments it was made at, which differ between two runs."""
-    doc = copy.deepcopy(doc)
-    doc.pop("generated_at", None)
-    if isinstance(doc.get("meta"), dict):
-        doc["meta"].pop("generated_at", None)
+    if isinstance(doc, dict):
+        return {k: unstamped(v) for k, v in doc.items() if k != "generated_at"}  # at any depth: a brief embeds triage and check
+    if isinstance(doc, list):
+        return [unstamped(v) for v in doc]
     return doc
 
 
@@ -78,7 +78,7 @@ class Repo(TempRepo):
     def cli(self, *argv):
         out = io.StringIO()
         with contextlib.redirect_stdout(out), contextlib.redirect_stderr(io.StringIO()):
-            code = main([*argv, "--repo", str(self.root)] if argv[0] in ("why", "impact", "triage", "check") else [argv[0], str(self.root), *argv[1:]])
+            code = main([*argv, "--repo", str(self.root)] if argv[0] in ("why", "impact", "triage", "check", "brief") else [argv[0], str(self.root), *argv[1:]])
         self.assertEqual(code, 0, out.getvalue())
         return out.getvalue()
 
@@ -95,7 +95,7 @@ class LegacyProtocolTest(Repo):
         self.assertIsNone(self.server.handle({"jsonrpc": "2.0", "method": "notifications/initialized"}))
         self.assertEqual(self.server.handle(request(2, "ping"))["result"], {})
         listed = self.server.handle(request(3, "tools/list"))["result"]["tools"]
-        self.assertEqual([t["name"] for t in listed], ["tessri_repos", "tessri_scan", "tessri_why", "tessri_impact", "tessri_graph", "tessri_triage", "tessri_check"])
+        self.assertEqual([t["name"] for t in listed], ["tessri_repos", "tessri_scan", "tessri_why", "tessri_impact", "tessri_graph", "tessri_triage", "tessri_check", "tessri_brief"])
         answer = call(self.server, "tessri_why", {"path": "pkg/core.py"}, rid=4)["result"]
         self.assertFalse(answer["isError"])
         self.assertNotIn("resultType", answer)
@@ -139,6 +139,7 @@ class ToolsTest(Repo):
             "tessri_graph": ({}, ("graph",), ("graph", "--format", "json")),
             "tessri_triage": ({}, ("triage",), ("triage", "--format", "json")),
             "tessri_check": ({}, ("check",), ("check", "--format", "json")),
+            "tessri_brief": ({"ran": ["unittest: 3 tests OK (exit 0)"]}, ("brief", "--ran", "unittest: 3 tests OK (exit 0)"), ("brief", "--ran", "unittest: 3 tests OK (exit 0)", "--format", "json")),
         }
         for name, (arguments, text_argv, json_argv) in cases.items():
             with self.subTest(name):
@@ -148,7 +149,7 @@ class ToolsTest(Repo):
                 self.assertEqual(unstamped(answer["structuredContent"]), unstamped(json.loads(self.cli(*json_argv))))
 
     def test_every_object_says_what_it_is(self):
-        for name, arguments in (("tessri_scan", {}), ("tessri_why", {"path": "pkg/core.py"}), ("tessri_impact", {"target": "pkg"}), ("tessri_graph", {}), ("tessri_triage", {}), ("tessri_check", {}), ("tessri_repos", {})):
+        for name, arguments in (("tessri_scan", {}), ("tessri_why", {"path": "pkg/core.py"}), ("tessri_impact", {"target": "pkg"}), ("tessri_graph", {}), ("tessri_triage", {}), ("tessri_check", {}), ("tessri_brief", {}), ("tessri_repos", {})):
             with self.subTest(name):
                 doc = call(self.server, name, arguments)["result"]["structuredContent"]
                 self.assertEqual(doc["schema_version"], 1)
@@ -175,6 +176,7 @@ class ToolsTest(Repo):
             ("tessri_impact", "target", "nothing/"): "`nothing` is not a file in the analysed set (excluded, binary or unknown type?)",
             ("tessri_triage", "since", "nope"): "`nope` is not a commit, branch or tag in this repository",
             ("tessri_check", "since", "nope"): "`nope` is not a commit, branch or tag in this repository",
+            ("tessri_brief", "since", "nope"): "`nope` is not a commit, branch or tag in this repository",
             ("tessri_scan", "root", "/nowhere/at/all"): "`/nowhere/at/all` is not a root this server was started with; `tessri_repos` lists them",
         }
         for (name, key, value), sentence in cases.items():
@@ -195,6 +197,8 @@ class ToolsTest(Repo):
             ("tessri_impact", {"target": "pkg", "edges": "weird"}, "`edges` must be one of all, imports"),
             ("tessri_impact", {"target": "pkg", "hops": 0}, "`hops` must be at least 1"),
             ("tessri_scan", {"limit": 3}, "unknown argument `limit`; the tool takes root, full"),
+            ("tessri_brief", {"ran": "unittest: OK"}, "`ran` must be array"),
+            ("tessri_brief", {"ran": ["unittest: OK", 0]}, "`ran` must be an array of strings"),
             ("tessri_repos", {"root": "x"}, "unknown argument `root`; the tool takes none"),
         ):
             with self.subTest(name, problem=problem):
@@ -275,6 +279,7 @@ class ReuseTest(Repo):
     def test_a_change_query_always_reads_afresh(self):
         self.ask("tessri_triage")
         self.ask("tessri_check")
+        self.ask("tessri_brief")
         self.assertEqual(self.calls, 0)  # they analyse through their own path, which is not kept
 
     def test_without_git_nothing_is_reused(self):

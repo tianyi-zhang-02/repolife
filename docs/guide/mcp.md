@@ -16,8 +16,8 @@ exits when its input closes. Every call sees the checkout as it is, uncommitted 
 reused for a later call only while the checkout's fingerprint is unchanged (HEAD, the paths git reports as changed
 or untracked with their sizes and modification times, and the configuration files) and for at most an hour, so a
 run of questions about one checkout costs one analysis. `meta.generated_at` is when that analysis was made.
-`tessri_triage` and `tessri_check` compare a change and always read afresh; a checkout that is not a git
-repository is analysed on every call.
+`tessri_triage`, `tessri_check` and `tessri_brief` compare a change and always read afresh; a checkout that is
+not a git repository is analysed on every call.
 
 ## The tools
 
@@ -36,6 +36,7 @@ describes them.
 | `tessri_graph` | `root`, `level`, `module_depth`, `include_tests` | `kind: "module-graph"` (`modules`, `edges`, `cycles`, `summary`, `caveats`) or `"file-graph"` (`nodes`, `edges`) | who imports whom, cycles, owners |
 | `tessri_triage` | `root`, `since` | `kind: "triage"` (`change`, `summary`, `files`, `areas`, `ripple`, `tests`, `reviewers`, `nobody_else_can_look`, `notes`) | which files of a change deserve a person first, who can look |
 | `tessri_check` | `root`, `since` | `kind: "change-check"` (`change`, `summary`, `changed_files`, `findings`, `orphans`, `dangling_imports`, `cycles`, `dependencies`, `unowned`, `modules_touched`, `notes`) | what a change did to the structure |
+| `tessri_brief` | `root`, `since`, `ran` | `kind: "brief"` (`change`, `attention`, `consequences`, `validation`, `people`, `open`, and the whole `triage` and `check` objects) | one page to hand the change over to a person |
 
 Arguments, with the command-line option each one is:
 
@@ -49,7 +50,8 @@ Arguments, with the command-line option each one is:
 | `level` (`graph`) | `"module"` or `"file"` | `"module"` | `--level`; at the file level the text is the JSON itself, since that picture has no Markdown form |
 | `module_depth` (`graph`) | integer from 1, or null | null (split by size) | `--module-depth` |
 | `include_tests` (`graph`) | boolean | false | `--include-tests` |
-| `since` (`triage`, `check`) | string | `"HEAD"` | `--since`: a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work |
+| `since` (`triage`, `check`, `brief`) | string | `"HEAD"` | `--since`: a commit, branch or tag; the change is where it and HEAD part, plus uncommitted work |
+| `ran` (`brief`) | array of strings | `[]` | `--ran`: the checks the host actually ran, one string each with the command, its result and exit code, recorded verbatim; without it the page says that none was recorded |
 | `full` (`scan`) | boolean | false | `--full`: the per-file table |
 
 Paths in and out are repository-relative with `/`, as in the JSON; `root` is the only place the machine's layout

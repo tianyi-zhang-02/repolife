@@ -64,3 +64,6 @@ old name (`from` names it, the flag reads `moved`) and its lines are the edits m
 who maintain the changed files, excluding the authors (the commits of the change, or whoever `git config user.name` is
 when the work is uncommitted); git cannot see who reviewed. Dependents are static imports only: importing `a.b.c`
 does not make a file depend on the package `a`, and dynamic loading and consumers outside the repository are invisible.
+
+`tessri brief --since main` puts this and `check` on one page from one analysis, with the commits and uncommitted
+files the evidence covers and the checks you ran: [the review brief](brief.md).

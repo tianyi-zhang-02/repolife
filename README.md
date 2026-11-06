@@ -61,7 +61,7 @@ real history, and the composite risk score we tried did not beat its parts, so t
 
 1. `tessri scan .` in any repository, or `tessri scan . --format html --out report.html` for one page to open.
 2. `tessri impact <path>` before a change, `tessri triage --since main` to review one, `tessri check --since main`
-   when it is done.
+   when it is done, and `tessri brief --since main` to hand it over on one page.
 3. `tessri integration install --agent claude` (or `codex`, `agents`, `copilot`) installs the agent's
    instructions with a receipt, `--agent mcp` points a host at `tessri mcp`, the same questions as MCP tools;
    `tessri integration remove` takes it all out again.
