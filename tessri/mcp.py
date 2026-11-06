@@ -2,8 +2,11 @@
 
 An agent that speaks MCP starts this as a subprocess and asks Tessri's questions as tool calls. Each tool is one
 command: its result carries the command's `--format json` object as `structuredContent` and the command's text or
-Markdown as `content`, both from one analysis, so the agent sees what the terminal shows. Nothing is written, no
-network is touched, and every call reads the checkout as it is at that moment; nothing is cached between calls.
+Markdown as `content`, both from one analysis, so the agent sees what the terminal shows. Nothing is written and no
+network is touched. Every call sees the checkout as it is: an analysis is reused for a later call only while the
+checkout's fingerprint (HEAD, the paths git reports as changed or untracked with their sizes and modification
+times, the configuration files) is unchanged, and for at most an hour; a change query (`triage`, `check`) always
+reads afresh.
 
 Two revisions of the protocol are spoken, because clients are on both: the 2026-07-28 revision has no handshake
 (every request carries its version in `_meta`, and `server/discover` says what the server is), the earlier ones
@@ -13,13 +16,17 @@ an unknown method or an unknown tool is a JSON-RPC error."""
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable, Sequence, TextIO
 
-from . import __version__, config, gitlog, graphview, modules, since, sinceview
+from . import __version__, config, gitlog, graphview, legacy, modules, since, sinceview
 from .analyze import Analysis, analyze
 from .explain import TargetError, explain, why_json
 from .gitlog import _git_line as git_line  # one-line probes, as the history reader runs them
@@ -34,6 +41,8 @@ SUPPORTED = (CURRENT, *LEGACY)
 VERSION_KEY = "io.modelcontextprotocol/protocolVersion"
 SERVER_KEY = "io.modelcontextprotocol/serverInfo"
 TTL_MS = 3_600_000  # how long a client may cache `server/discover`; the tool list never changes while running
+REUSE_SECONDS = 3600  # how long an analysis of an unchanged checkout is reused: ages are day-granular, so an hour costs nothing
+CONFIG_FILES = (".tessri.toml", legacy.CONFIG_FILE, "pyproject.toml")  # what `config.load` reads; usually tracked, but stat'd regardless
 
 PARSE_ERROR, INVALID_REQUEST, METHOD_NOT_FOUND, INVALID_PARAMS, INTERNAL_ERROR = -32700, -32600, -32601, -32602, -32603
 UNSUPPORTED_VERSION = -32022
@@ -67,6 +76,37 @@ class _Invalid(Exception):
 class Checkout:
     name: str
     root: Path
+
+
+@dataclass
+class Kept:
+    """One analysis held for reuse, with the fingerprint of the checkout it was made from."""
+
+    fingerprint: tuple
+    analysis: Analysis
+
+
+def fingerprint(root: Path) -> tuple | None:
+    """What the analysis depends on, read cheaply: HEAD, every path git reports as changed or untracked (ignored
+    files are never analysed) with its size and modification time, and the configuration files' stats. None without
+    a repository or when git cannot answer, so that nothing is reused there."""
+    head = gitlog.commit_id(root, "HEAD")
+    if head is None:
+        return None
+    try:
+        status = subprocess.run(["git", "-C", str(root), "status", "--porcelain=v1", "-z", "--untracked-files=all"], capture_output=True, check=True, timeout=60).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    def stat(rel: str) -> tuple:
+        try:
+            st = os.stat(root / rel)
+        except OSError:
+            return (rel, None, None)
+        return (rel, st.st_mtime_ns, st.st_size)
+
+    changed = tuple(stat(entry[3:].decode("utf-8", "surrogateescape")) for entry in status.split(b"\0") if len(entry) > 3)
+    return (head, hashlib.sha256(status).hexdigest(), changed, tuple(stat(name) for name in CONFIG_FILES))
 
 
 @dataclass(frozen=True)
@@ -267,6 +307,8 @@ class Server:
     def __init__(self, roots: Sequence[Path]):
         self.checkouts = name_checkouts([Path(r) for r in roots])
         self.version: str | None = None  # the revision an `initialize` settled on; None until then or under 2026-07-28
+        self.kept: dict[Path, Kept] = {}  # the last analysis per root, reused while the checkout's fingerprint holds
+        self.clock: Callable[[], float] = time.time
 
     # --- the checkout a call is about ---------------------------------------------------------------------------
 
@@ -301,8 +343,19 @@ class Server:
         return root, cfg
 
     def analysis(self, args: dict) -> tuple[Path, Analysis]:
+        """The analysis of the checkout as it is now: the one kept from an earlier call when the fingerprint still
+        matches and it is less than REUSE_SECONDS old, otherwise a fresh one, kept for the next call."""
         root, cfg = self.configured(args)
-        return root, analyze(root, cfg)
+        key = fingerprint(root)
+        kept = self.kept.get(root)
+        if key is not None and kept is not None and kept.fingerprint == key and self.clock() - kept.analysis.now < REUSE_SECONDS:
+            return root, kept.analysis
+        found = analyze(root, cfg, now=self.clock())
+        if key is not None:
+            self.kept[root] = Kept(key, found)
+        else:
+            self.kept.pop(root, None)
+        return root, found
 
     # --- the protocol --------------------------------------------------------------------------------------------
 
